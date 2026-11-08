@@ -95,3 +95,20 @@ th{text-align:left;color:var(--mut);font-weight:normal}th,td{padding:10px 8px;bo
 .est.borrador{background:#fff3e0;color:#e37400}.est.revision{background:#e6f9ff;color:#0088aa}.est.obsoleto{background:#eee;color:#777}
 .frm{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}.frm label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--mut)}
 @media(max-width:600px){.frm{grid-template-columns:1fr}}
+
+.masw{position:relative}.ctx.mas{position:absolute;top:42px;left:0;width:180px}
+.tab{padding:8px 12px}
+.kan{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(230px,1fr);gap:12px;overflow-x:auto;padding-bottom:8px}
+.col{background:#f1f5f6;border-radius:12px;padding:10px;min-height:120px}
+.pc{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:8px;cursor:pointer}.pc:hover{border-color:var(--cy);box-shadow:0 3px 10px rgba(0,205,255,.25)}
+.pc small{display:block}.rojo{color:#d32f2f}
+.tg{font-size:11px;color:var(--az);margin-left:6px;font-weight:normal}
+.coms{margin-top:14px}.com{border-top:1px solid var(--line);padding:6px 0}.com p{margin:2px 0}.x2{background:none;border:0;color:var(--mut);margin-left:8px}
+.et{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--mut);margin:6px 0}.et2{grid-column:1/-1;display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--mut)}
+.fs{border:0;padding:0;margin:0}
+.clic{cursor:pointer}.clic:hover{background:#e6f9ff}
+.sem{padding:2px 10px;border-radius:99px;font-size:12px;font-weight:bold;white-space:nowrap}
+.sem.verde{background:#e3f6e8;color:#2e7d32}.sem.amar{background:#fff3e0;color:#e37400}.sem.rojo{background:#fde7e4;color:#d32f2f}
+.inds{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin:14px 0}
+.ind{border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:2px;border-left:6px solid var(--line);background:#f7fafb}
+.ind b{font-size:30px;color:#000}.ind.ok{border-color:#2e7d32;background:#f1faf3}.ind.mal{border-color:#d32f2f;background:#fff4f2}.ind.na{border-color:var(--mut)}
