@@ -3,6 +3,7 @@ import { supabase } from './supabase'
 import logo from './logo.svg'
 
 const APP = 'Geoteca Ecogis'
+const SUB_PROYECTO = ['01_Contrato-y-Propuesta', '02_Planeacion', '03_Captura-de-Campo', '04_Procesamiento-y-Analisis', '05_Control-de-Calidad', '06_Entregables', '07_Cierre-y-Evaluacion']
 
 const TIPOS = ['Contrato', 'Informe técnico', 'Cartografía / SIG', 'Plano / CAD', 'Hoja de cálculo', 'Presentación', 'Imagen', 'Facturación', 'Legal', 'Otro']
 const COLORES = ['#374845', '#2a2aff', '#00cdff', '#e53935', '#fb8c00', '#43a047', '#8e24aa', '#6d4c41']
@@ -166,6 +167,18 @@ function Drive({ perfil, q }) {
     const { error } = await supabase.from('folders').insert({ nombre: nombre.trim(), parent_id: cur, created_by: perfil.id })
     if (error) setMsg(error.message); cargar()
   }
+  const crearProyecto = async () => {
+    const cliente = prompt('Cliente (ej. Alcaldia Valledupar):'); if (!cliente?.trim()) return
+    const nombre = prompt('Nombre corto del proyecto (ej. Catastro Rural):'); if (!nombre?.trim()) return
+    const limpio = t => t.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '')
+    const anio = new Date().getFullYear()
+    const nums = folders.filter(f => f.parent_id === cur && f.nombre.startsWith(anio + '-')).map(f => parseInt(f.nombre.slice(5, 8)) || 0)
+    const cod = `${anio}-${String(Math.max(0, ...nums) + 1).padStart(3, '0')}`
+    const { data, error } = await supabase.from('folders').insert({ nombre: `${cod}_${limpio(cliente)}_${limpio(nombre)}`, parent_id: cur, color: '#2a2aff', created_by: perfil.id }).select().single()
+    if (error) return setMsg(error.message)
+    await supabase.from('folders').insert(SUB_PROYECTO.map(n => ({ nombre: n, parent_id: data.id, color: '#2a2aff', created_by: perfil.id })))
+    await cargar(); ir(data.id)
+  }
   const preparar = files => files.length && setPend(files.map(file => ({ file, tipo: detectar(file.name) })))
   const subir = async arr => {
     setPend(null); setBusy(true); setMsg('')
@@ -223,7 +236,8 @@ function Drive({ perfil, q }) {
         <div style={{ position: 'relative' }}>
           <button className="nuevo" onClick={e => { e.stopPropagation(); setNuevo(!nuevo) }}><span>＋</span> Nuevo</button>
           {nuevo && <div className="pop" onClick={e => e.stopPropagation()}>
-            <button onClick={() => { setNuevo(false); crearCarpeta() }}>Nueva carpeta / proyecto</button>
+            <button onClick={() => { setNuevo(false); crearProyecto() }}>Nuevo proyecto (estructura estándar)</button>
+            <button onClick={() => { setNuevo(false); crearCarpeta() }}>Nueva carpeta</button>
             <button onClick={() => { setNuevo(false); inp.current.click() }}>Subir archivos</button></div>}
           <input ref={inp} type="file" multiple hidden onChange={e => { preparar([...e.target.files]); e.target.value = '' }} />
         </div>
