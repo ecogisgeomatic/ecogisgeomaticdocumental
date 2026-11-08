@@ -1,184 +1,205 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from './supabase'
 
-const CATEGORIAS = ['Contrato', 'Informe técnico', 'Cartografía / SIG', 'Facturación', 'Legal', 'Otro']
-const fmt = b => (b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.ceil(b / 1024) + ' KB')
-const fecha = d => new Date(d).toLocaleDateString('es-CO')
+const fmt = b => (!b ? '—' : b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.ceil(b / 1024) + ' KB')
+const fecha = d => new Date(d).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })
+const ext = n => (n.includes('.') ? n.split('.').pop() : '').toLowerCase()
+const COL = { pdf: '#d93025', doc: '#1a73e8', docx: '#1a73e8', xls: '#188038', xlsx: '#188038', csv: '#188038', dwg: '#e37400', shp: '#7b1fa2', kml: '#7b1fa2', kmz: '#7b1fa2', tif: '#00897b', tiff: '#00897b', jpg: '#c2185b', jpeg: '#c2185b', png: '#c2185b', zip: '#5f6368' }
+const FileIcon = ({ n }) => <div className="fi" style={{ background: COL[ext(n)] || '#5f6368' }}>{ext(n).slice(0, 4) || 'file'}</div>
+const FolderIcon = () => <svg width="44" height="44" viewBox="0 0 24 24" fill="#4f7d68"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z" /></svg>
 
 function Auth() {
   const [modo, setModo] = useState('in')
   const [f, setF] = useState({ email: '', pass: '', nombre: '' })
   const [msg, setMsg] = useState('')
+  const set = k => e => setF({ ...f, [k]: e.target.value })
   const enviar = async e => {
     e.preventDefault(); setMsg('')
     const { error } = modo === 'in'
       ? await supabase.auth.signInWithPassword({ email: f.email, password: f.pass })
       : await supabase.auth.signUp({ email: f.email, password: f.pass, options: { data: { nombre: f.nombre } } })
     if (error) setMsg(error.message)
-    else if (modo === 'up') setMsg('Cuenta creada. Si te llega un correo de confirmación, ábrelo y luego ingresa.')
   }
   return (
-    <div className="auth">
-      <form onSubmit={enviar} className="auth-box">
-        <h1>Ecogis Geomatic SAS</h1>
-        <p className="muted">Gestor documental de proyectos</p>
-        {modo === 'up' && <input placeholder="Nombre completo" required value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} />}
-        <input type="email" placeholder="Correo" required value={f.email} onChange={e => setF({ ...f, email: e.target.value })} />
-        <input type="password" placeholder="Contraseña (mínimo 6)" minLength={6} required value={f.pass} onChange={e => setF({ ...f, pass: e.target.value })} />
-        <button className="btn">{modo === 'in' ? 'Ingresar' : 'Crear cuenta'}</button>
-        {msg && <p className="msg">{msg}</p>}
-        <a href="#" onClick={e => { e.preventDefault(); setModo(modo === 'in' ? 'up' : 'in'); setMsg('') }}>
-          {modo === 'in' ? 'Crear una cuenta nueva' : 'Ya tengo cuenta'}
-        </a>
-      </form>
-    </div>
+    <div className="auth"><form onSubmit={enviar} className="auth-box">
+      <h1>Ecogis Geomatic SAS</h1><p className="muted">Gestor documental</p>
+      {modo === 'up' && <input placeholder="Nombre completo" required value={f.nombre} onChange={set('nombre')} />}
+      <input type="email" placeholder="Correo" required value={f.email} onChange={set('email')} />
+      <input type="password" placeholder="Contraseña (mínimo 6)" minLength={6} required value={f.pass} onChange={set('pass')} />
+      <button className="btn">{modo === 'in' ? 'Ingresar' : 'Crear cuenta'}</button>
+      {msg && <p className="msg">{msg}</p>}
+      <a href="#" onClick={e => { e.preventDefault(); setModo(modo === 'in' ? 'up' : 'in'); setMsg('') }}>{modo === 'in' ? 'Crear una cuenta nueva' : 'Ya tengo cuenta'}</a>
+    </form></div>
   )
 }
 
-function Documentos({ perfil }) {
-  const [proyectos, setProyectos] = useState([])
-  const [sel, setSel] = useState('general')
+function Drive({ perfil, q }) {
+  const [folders, setFolders] = useState([])
   const [docs, setDocs] = useState([])
-  const [busca, setBusca] = useState('')
-  const [nuevo, setNuevo] = useState(null)
-  const [cat, setCat] = useState(CATEGORIAS[0])
-  const [subiendo, setSubiendo] = useState(false)
-  const [err, setErr] = useState('')
+  const [cur, setCur] = useState(null)
+  const [vista, setVista] = useState('grid')
+  const [menu, setMenu] = useState(null)
+  const [nuevo, setNuevo] = useState(false)
+  const [prev, setPrev] = useState(null)
+  const [over, setOver] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+  const drag = useRef(null)
+  const inp = useRef()
 
-  const cargarProyectos = useCallback(async () => {
-    const { data } = await supabase.from('projects').select('*').order('created_at', { ascending: false })
-    setProyectos(data || [])
-  }, [])
-  const cargarDocs = useCallback(async () => {
-    let q = supabase.from('documents').select('*').order('created_at', { ascending: false })
-    q = sel === 'general' ? q.is('project_id', null) : q.eq('project_id', sel)
-    const { data } = await q
-    setDocs(data || [])
-  }, [sel])
-  useEffect(() => { cargarProyectos() }, [cargarProyectos])
-  useEffect(() => { cargarDocs() }, [cargarDocs])
+  const cargar = useCallback(async () => {
+    const { data: f } = await supabase.from('folders').select('*').order('nombre')
+    setFolders(f || [])
+    let qq = supabase.from('documents').select('*').order('nombre')
+    qq = q ? qq.ilike('nombre', `%${q}%`) : cur ? qq.eq('folder_id', cur) : qq.is('folder_id', null)
+    const { data: d } = await qq
+    setDocs(d || [])
+  }, [cur, q])
+  useEffect(() => { cargar() }, [cargar])
+  useEffect(() => { const c = () => { setMenu(null); setNuevo(false) }; window.addEventListener('click', c); return () => window.removeEventListener('click', c) }, [])
 
-  const crearProyecto = async e => {
-    e.preventDefault()
-    const { data, error } = await supabase.from('projects').insert({ ...nuevo, created_by: perfil.id }).select().single()
-    if (error) return setErr(error.message)
-    setNuevo(null); await cargarProyectos(); setSel(data.id)
+  const descend = id => [id, ...folders.filter(f => f.parent_id === id).flatMap(f => descend(f.id))]
+  const ruta = []
+  for (let f = folders.find(x => x.id === cur); f; f = folders.find(x => x.id === f.parent_id)) ruta.unshift(f)
+  const subs = q ? folders.filter(f => f.nombre.toLowerCase().includes(q.toLowerCase())) : folders.filter(f => f.parent_id === cur)
+
+  const crearCarpeta = async () => {
+    const nombre = prompt('Nombre de la carpeta o proyecto:'); if (!nombre?.trim()) return
+    const { error } = await supabase.from('folders').insert({ nombre: nombre.trim(), parent_id: cur, created_by: perfil.id })
+    if (error) setMsg(error.message); cargar()
   }
-  const subir = async e => {
-    const files = [...e.target.files]; if (!files.length) return
-    setSubiendo(true); setErr('')
+  const subir = async files => {
+    setBusy(true); setMsg('')
     for (const file of files) {
-      const path = `${sel}/${Date.now()}-${file.name.replace(/[^\w.\-]/g, '_')}`
-      const up = await supabase.storage.from('documentos').upload(path, file)
-      if (up.error) { setErr(up.error.message); continue }
-      const { error } = await supabase.from('documents').insert({
-        project_id: sel === 'general' ? null : sel, nombre: file.name, path, tamano: file.size,
-        tipo: file.type || 'archivo', categoria: cat, uploaded_by: perfil.id, uploaded_by_nombre: perfil.nombre || perfil.email
-      })
-      if (error) setErr(error.message)
+      const path = `${cur || 'raiz'}/${Date.now()}-${file.name.replace(/[^\w.\-]/g, '_')}`
+      const u = await supabase.storage.from('documentos').upload(path, file)
+      if (u.error) { setMsg(u.error.message); continue }
+      const { error } = await supabase.from('documents').insert({ folder_id: cur, nombre: file.name, path, tamano: file.size, tipo: file.type, uploaded_by: perfil.id, uploaded_by_nombre: perfil.nombre || perfil.email })
+      if (error) setMsg(error.message)
     }
-    e.target.value = ''; setSubiendo(false); cargarDocs()
+    setBusy(false); cargar()
   }
-  const descargar = async d => {
-    const { data, error } = await supabase.storage.from('documentos').createSignedUrl(d.path, 60, { download: d.nombre })
-    if (error) return setErr(error.message)
-    window.open(data.signedUrl, '_blank')
+  const url = async (d, descarga) => {
+    const { data, error } = await supabase.storage.from('documentos').createSignedUrl(d.path, 3600, descarga ? { download: d.nombre } : undefined)
+    if (error) { setMsg(error.message); return null } return data.signedUrl
   }
-  const borrar = async d => {
-    if (!confirm(`¿Eliminar "${d.nombre}"?`)) return
-    await supabase.storage.from('documentos').remove([d.path])
-    const { error } = await supabase.from('documents').delete().eq('id', d.id)
-    if (error) setErr(error.message); else cargarDocs()
+  const abrir = async d => { const u = await url(d); if (u) setPrev({ d, u }) }
+  const descargar = async d => { const u = await url(d, true); if (u) window.open(u, '_blank') }
+  const renombrar = async (t, x) => {
+    const nombre = prompt('Nuevo nombre:', x.nombre); if (!nombre?.trim()) return
+    await supabase.from(t === 'f' ? 'folders' : 'documents').update({ nombre: nombre.trim() }).eq('id', x.id); cargar()
   }
-  const borrarProyecto = async p => {
-    if (!confirm(`¿Eliminar el proyecto "${p.nombre}" y todos sus documentos?`)) return
-    const { data } = await supabase.from('documents').select('path').eq('project_id', p.id)
-    if (data?.length) await supabase.storage.from('documentos').remove(data.map(x => x.path))
-    await supabase.from('projects').delete().eq('id', p.id)
-    setSel('general'); cargarProyectos()
+  const borrar = async (t, x) => {
+    if (!confirm(`¿Eliminar "${x.nombre}"${t === 'f' ? ' con todo su contenido' : ''}?`)) return
+    if (t === 'd') {
+      const { error } = await supabase.from('documents').delete().eq('id', x.id)
+      if (error) return setMsg(error.message)
+      await supabase.storage.from('documentos').remove([x.path])
+    } else {
+      const ids = descend(x.id)
+      const { data } = await supabase.from('documents').select('path').in('folder_id', ids)
+      const { error } = await supabase.from('folders').delete().eq('id', x.id)
+      if (error) return setMsg(error.message)
+      if (data?.length) await supabase.storage.from('documentos').remove(data.map(r => r.path))
+      if (ids.includes(cur)) setCur(x.parent_id)
+    }
+    cargar()
   }
+  const mover = async dest => {
+    const d = drag.current; drag.current = null; if (!d) return
+    if (d.tipo === 'f') { if (d.id === dest || descend(d.id).includes(dest)) return; await supabase.from('folders').update({ parent_id: dest }).eq('id', d.id) }
+    else await supabase.from('documents').update({ folder_id: dest }).eq('id', d.id)
+    cargar()
+  }
+  const dz = { onDragOver: e => { if (drag.current) return; if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setOver(true) } }, onDragLeave: () => setOver(false), onDrop: e => { setOver(false); if (e.dataTransfer.files.length) { e.preventDefault(); subir([...e.dataTransfer.files]) } } }
 
-  const actual = proyectos.find(p => p.id === sel)
-  const lista = docs.filter(d => (d.nombre + d.categoria).toLowerCase().includes(busca.toLowerCase()))
+  const item = (t, x) => {
+    const f = t === 'f'
+    return (
+      <div key={t + x.id} className="it" draggable
+        onDragStart={e => { drag.current = { tipo: t, id: x.id }; e.dataTransfer.effectAllowed = 'move' }} onDragEnd={() => { drag.current = null }}
+        onClick={() => (f ? (setCur(x.id)) : abrir(x))}
+        onContextMenu={e => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, t, i: x }) }}
+        onDragOver={f ? e => { if (drag.current) e.preventDefault() } : undefined}
+        onDrop={f ? e => { e.stopPropagation(); mover(x.id) } : undefined}>
+        <div className="ic">{f ? <FolderIcon /> : <FileIcon n={x.nombre} />}</div>
+        <div className="nm" title={x.nombre}>{x.nombre}</div>
+        <div className="meta">{f ? '—' : fmt(x.tamano)}</div>
+        <div className="meta">{f ? '' : x.uploaded_by_nombre}</div>
+        <div className="meta">{fecha(x.created_at)}</div>
+        <button className="dots" aria-label="Más opciones" onClick={e => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: r.left - 120, y: r.bottom, t, i: x }) }}>⋮</button>
+      </div>
+    )
+  }
 
   return (
-    <div className="split">
-      <aside>
-        <button className="btn full" onClick={() => setNuevo({ nombre: '', cliente: '', descripcion: '' })}>Nuevo proyecto</button>
-        <ul className="lista">
-          <li className={sel === 'general' ? 'on' : ''} onClick={() => setSel('general')}>Documentos generales</li>
-          {proyectos.map(p => (
-            <li key={p.id} className={sel === p.id ? 'on' : ''} onClick={() => setSel(p.id)}>
-              {p.nombre}<small>{p.cliente}</small>
-            </li>
-          ))}
-        </ul>
+    <div className="drive">
+      <aside className="side">
+        <div style={{ position: 'relative' }}>
+          <button className="nuevo" onClick={e => { e.stopPropagation(); setNuevo(!nuevo) }}><span>＋</span> Nuevo</button>
+          {nuevo && <div className="pop" onClick={e => e.stopPropagation()}>
+            <button onClick={() => { setNuevo(false); crearCarpeta() }}>Nueva carpeta / proyecto</button>
+            <button onClick={() => { setNuevo(false); inp.current.click() }}>Subir archivos</button>
+          </div>}
+          <input ref={inp} type="file" multiple hidden onChange={e => { subir([...e.target.files]); e.target.value = '' }} />
+        </div>
+        <button className={'nav' + (!cur && !q ? ' on' : '')} onClick={() => setCur(null)} onDragOver={e => drag.current && e.preventDefault()} onDrop={() => mover(null)}>Unidad de Ecogis</button>
+        <div className="sub">Proyectos</div>
+        {folders.filter(f => !f.parent_id).map(f => <button key={f.id} className={'nav small' + (ruta[0]?.id === f.id ? ' on' : '')} onClick={() => setCur(f.id)} onDragOver={e => drag.current && e.preventDefault()} onDrop={() => mover(f.id)}>{f.nombre}</button>)}
       </aside>
-      <section>
-        <div className="head">
-          <div>
-            <h2>{actual ? actual.nombre : 'Documentos generales de la empresa'}</h2>
-            <p className="muted">{actual ? actual.descripcion || actual.cliente : 'Legal, administrativo y archivos de uso común'}</p>
-          </div>
-          {actual && (perfil.rol === 'admin' || actual.created_by === perfil.id) &&
-            <button className="btn ghost" onClick={() => borrarProyecto(actual)}>Eliminar proyecto</button>}
-        </div>
+      <main className={'panel' + (over ? ' over' : '')} {...dz}>
         <div className="bar">
-          <input placeholder="Buscar por nombre o categoría" value={busca} onChange={e => setBusca(e.target.value)} />
-          <select value={cat} onChange={e => setCat(e.target.value)}>{CATEGORIAS.map(c => <option key={c}>{c}</option>)}</select>
-          <label className="btn">{subiendo ? 'Subiendo…' : 'Subir archivos'}<input type="file" multiple hidden onChange={subir} disabled={subiendo} /></label>
+          <div className="crumbs">
+            {q ? <b>Resultados para “{q}”</b> : <>
+              <button onClick={() => setCur(null)} onDragOver={e => drag.current && e.preventDefault()} onDrop={() => mover(null)}>Unidad de Ecogis</button>
+              {ruta.map(f => <span key={f.id}> › <button onClick={() => setCur(f.id)} onDragOver={e => drag.current && e.preventDefault()} onDrop={() => mover(f.id)}>{f.nombre}</button></span>)}</>}
+          </div>
+          <div className="seg">
+            <button className={vista === 'list' ? 'on' : ''} onClick={() => setVista('list')} title="Lista">☰</button>
+            <button className={vista === 'grid' ? 'on' : ''} onClick={() => setVista('grid')} title="Cuadrícula">▦</button>
+          </div>
         </div>
-        {err && <p className="msg">{err}</p>}
-        {lista.length === 0 ? <p className="vacio">Aún no hay archivos aquí. Sube el primero con “Subir archivos”.</p> : (
-          <div className="tabla-w"><table>
-            <thead><tr><th>Archivo</th><th>Categoría</th><th>Tamaño</th><th>Subido por</th><th>Fecha</th><th></th></tr></thead>
-            <tbody>{lista.map(d => (
-              <tr key={d.id}>
-                <td>{d.nombre}</td><td>{d.categoria}</td><td>{fmt(d.tamano)}</td><td>{d.uploaded_by_nombre}</td><td>{fecha(d.created_at)}</td>
-                <td className="acc">
-                  <button onClick={() => descargar(d)}>Descargar</button>
-                  {(perfil.rol === 'admin' || d.uploaded_by === perfil.id) && <button onClick={() => borrar(d)}>Eliminar</button>}
-                </td>
-              </tr>))}</tbody>
-          </table></div>)}
-      </section>
-      {nuevo && (
-        <div className="modal" onClick={() => setNuevo(null)}>
-          <form className="auth-box" onClick={e => e.stopPropagation()} onSubmit={crearProyecto}>
-            <h2>Nuevo proyecto</h2>
-            <input placeholder="Nombre del proyecto" required value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })} />
-            <input placeholder="Cliente" value={nuevo.cliente} onChange={e => setNuevo({ ...nuevo, cliente: e.target.value })} />
-            <textarea placeholder="Descripción" rows={3} value={nuevo.descripcion} onChange={e => setNuevo({ ...nuevo, descripcion: e.target.value })} />
-            <button className="btn">Crear proyecto</button>
-          </form>
-        </div>)}
+        {busy && <p className="msg ok">Subiendo archivos…</p>}
+        {msg && <p className="msg">{msg}</p>}
+        {vista === 'list' && subs.length + docs.length > 0 && <div className="it head"><div className="ic" /><div className="nm">Nombre</div><div className="meta">Tamaño</div><div className="meta">Subido por</div><div className="meta">Fecha</div><div className="dots" /></div>}
+        <div className={vista}>
+          {subs.map(f => item('f', f))}
+          {docs.map(d => item('d', d))}
+        </div>
+        {subs.length + docs.length === 0 && <div className="vacio"><b>{q ? 'Sin resultados' : 'Esta carpeta está vacía'}</b><p>{q ? 'Prueba con otro nombre.' : 'Arrastra archivos aquí o usa el botón Nuevo.'}</p></div>}
+        {over && <div className="drop">Suelta los archivos para subirlos</div>}
+      </main>
+      {menu && <div className="ctx" style={{ left: Math.min(menu.x, window.innerWidth - 190), top: Math.min(menu.y, window.innerHeight - 190) }} onClick={e => e.stopPropagation()}>
+        <button onClick={() => { menu.t === 'f' ? setCur(menu.i.id) : abrir(menu.i); setMenu(null) }}>Abrir</button>
+        {menu.t === 'd' && <button onClick={() => { descargar(menu.i); setMenu(null) }}>Descargar</button>}
+        <button onClick={() => { renombrar(menu.t, menu.i); setMenu(null) }}>Cambiar nombre</button>
+        <button className="rojo" onClick={() => { borrar(menu.t, menu.i); setMenu(null) }}>Eliminar</button>
+      </div>}
+      {prev && <div className="modal" onClick={() => setPrev(null)}>
+        <div className="pv" onClick={e => e.stopPropagation()}>
+          <div className="pvh"><b>{prev.d.nombre}</b><span><button className="btn" onClick={() => descargar(prev.d)}>Descargar</button> <button className="btn ghost" onClick={() => setPrev(null)}>Cerrar</button></span></div>
+          {['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext(prev.d.nombre)) ? <img src={prev.u} alt={prev.d.nombre} />
+            : ext(prev.d.nombre) === 'pdf' ? <iframe src={prev.u} title={prev.d.nombre} />
+            : <div className="vacio"><b>Sin vista previa para este tipo de archivo</b><p>Descárgalo para abrirlo en tu equipo.</p></div>}
+        </div>
+      </div>}
     </div>
   )
 }
 
 function Usuarios({ perfil }) {
   const [users, setUsers] = useState([])
-  const cargar = useCallback(async () => {
-    const { data } = await supabase.from('profiles').select('*').order('created_at')
-    setUsers(data || [])
-  }, [])
+  const cargar = useCallback(async () => { const { data } = await supabase.from('profiles').select('*').order('created_at'); setUsers(data || []) }, [])
   useEffect(() => { cargar() }, [cargar])
-  const cambiar = async (id, cambios) => { await supabase.from('profiles').update(cambios).eq('id', id); cargar() }
+  const cambiar = async (id, c) => { await supabase.from('profiles').update(c).eq('id', id); cargar() }
   return (
-    <section className="solo">
-      <h2>Usuarios</h2>
-      <p className="muted">Las personas nuevas se registran solas y quedan inactivas hasta que las actives aquí.</p>
-      <div className="tabla-w"><table>
-        <thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Estado</th></tr></thead>
-        <tbody>{users.map(u => (
-          <tr key={u.id}>
-            <td>{u.nombre || '—'}</td><td>{u.email}</td>
-            <td><select disabled={u.id === perfil.id} value={u.rol} onChange={e => cambiar(u.id, { rol: e.target.value })}>
-              <option value="miembro">Miembro</option><option value="admin">Administrador</option></select></td>
-            <td><button disabled={u.id === perfil.id} onClick={() => cambiar(u.id, { activo: !u.activo })}>{u.activo ? 'Activo · desactivar' : 'Inactivo · activar'}</button></td>
-          </tr>))}</tbody>
-      </table></div>
-    </section>
+    <div className="panel solo"><h2>Usuarios</h2>
+      <p className="muted">Quienes se registran quedan inactivos hasta que los actives aquí.</p>
+      <table><thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Acceso</th></tr></thead>
+        <tbody>{users.map(u => <tr key={u.id}><td>{u.nombre || '—'}</td><td>{u.email}</td>
+          <td><select disabled={u.id === perfil.id} value={u.rol} onChange={e => cambiar(u.id, { rol: e.target.value })}><option value="miembro">Miembro</option><option value="admin">Administrador</option></select></td>
+          <td><button className={'chip ' + (u.activo ? 'si' : 'no')} disabled={u.id === perfil.id} onClick={() => cambiar(u.id, { activo: !u.activo })}>{u.activo ? 'Activo' : 'Inactivo · activar'}</button></td></tr>)}</tbody></table>
+    </div>
   )
 }
 
@@ -186,6 +207,7 @@ export default function App() {
   const [sesion, setSesion] = useState(undefined)
   const [perfil, setPerfil] = useState(null)
   const [vista, setVista] = useState('docs')
+  const [q, setQ] = useState('')
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSesion(data.session))
     const { data: s } = supabase.auth.onAuthStateChange((_e, ses) => setSesion(ses))
@@ -195,29 +217,20 @@ export default function App() {
     if (!sesion) return setPerfil(null)
     supabase.from('profiles').select('*').eq('id', sesion.user.id).single().then(({ data }) => setPerfil(data))
   }, [sesion])
-
   if (sesion === undefined) return null
   if (!sesion) return <Auth />
   if (!perfil) return <p className="vacio">Cargando…</p>
-  if (!perfil.activo) return (
-    <div className="auth"><div className="auth-box">
-      <h2>Cuenta pendiente de activación</h2>
-      <p className="muted">Un administrador de Ecogis debe activar tu acceso. Vuelve a ingresar cuando te avisen.</p>
-      <button className="btn" onClick={() => supabase.auth.signOut()}>Salir</button>
-    </div></div>)
-
+  if (!perfil.activo) return <div className="auth"><div className="auth-box"><h2>Cuenta pendiente de activación</h2><p className="muted">Un administrador de Ecogis debe activar tu acceso.</p><button className="btn" onClick={() => supabase.auth.signOut()}>Salir</button></div></div>
+  const ini = (perfil.nombre || perfil.email || '?')[0].toUpperCase()
   return (
-    <>
-      <header>
-        <strong>Ecogis Geomatic SAS</strong>
-        <nav>
-          <button className={vista === 'docs' ? 'on' : ''} onClick={() => setVista('docs')}>Proyectos y archivos</button>
-          {perfil.rol === 'admin' && <button className={vista === 'users' ? 'on' : ''} onClick={() => setVista('users')}>Usuarios</button>}
-        </nav>
-        <span className="muted">{perfil.nombre || perfil.email}</span>
-        <button className="btn ghost" onClick={() => supabase.auth.signOut()}>Salir</button>
+    <div className="app">
+      <header className="top">
+        <div className="logo">Ecogis <span>Documentos</span></div>
+        <input className="search" placeholder="Buscar en la unidad" value={q} onChange={e => { setQ(e.target.value); setVista('docs') }} />
+        {perfil.rol === 'admin' && <button className={'tab' + (vista === 'users' ? ' on' : '')} onClick={() => setVista(vista === 'users' ? 'docs' : 'users')}>Usuarios</button>}
+        <button className="av" title="Cerrar sesión" onClick={() => supabase.auth.signOut()}>{ini}</button>
       </header>
-      {vista === 'docs' ? <Documentos perfil={perfil} /> : <Usuarios perfil={perfil} />}
-    </>
+      {vista === 'docs' ? <Drive perfil={perfil} q={q} /> : <Usuarios perfil={perfil} />}
+    </div>
   )
 }
