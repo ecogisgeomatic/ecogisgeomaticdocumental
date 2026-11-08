@@ -32,6 +32,25 @@ const cargarMammoth = () => window.mammoth ? Promise.resolve() : new Promise((ok
   s.onload = ok; s.onerror = no; document.head.appendChild(s)
 })
 
+const ESTADOS = { borrador: 'Borrador', revision: 'En revisión', vigente: 'Vigente', obsoleto: 'Obsoleto' }
+const cargarLib = (src, g) => window[g] ? Promise.resolve() : new Promise((ok, no) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = no; document.head.appendChild(s) })
+const subirGrande = async (file, path, onProg) => {
+  await cargarLib('https://cdn.jsdelivr.net/npm/tus-js-client@4.1.0/dist/tus.min.js', 'tus')
+  const { data: { session } } = await supabase.auth.getSession()
+  const ref = new URL(import.meta.env.VITE_SUPABASE_URL).hostname.split('.')[0]
+  return new Promise(resolve => {
+    const up = new window.tus.Upload(file, {
+      endpoint: `https://${ref}.storage.supabase.co/storage/v1/upload/resumable`,
+      retryDelays: [0, 3000, 5000, 10000, 20000],
+      headers: { authorization: `Bearer ${session.access_token}`, apikey: import.meta.env.VITE_SUPABASE_ANON_KEY, 'x-upsert': 'false' },
+      uploadDataDuringCreation: true, removeFingerprintOnSuccess: true, chunkSize: 6 * 1024 * 1024,
+      metadata: { bucketName: 'documentos', objectName: path, contentType: file.type || 'application/octet-stream', cacheControl: 3600 },
+      onError: e => resolve({ message: 'No se pudo subir (' + (e.message || e) + '). Revisa el límite de tamaño de tu plan en Supabase.' }),
+      onProgress: (a, t) => onProg(Math.round((a / t) * 100)), onSuccess: () => resolve(null)
+    })
+    up.findPreviousUploads().then(prev => { if (prev.length) up.resumeFromPreviousUpload(prev[0]); up.start() })
+  })
+}
 const FileIcon = ({ n }) => <div className="fi" style={{ background: COL[ext(n)] || '#546e7a' }}>{ext(n).slice(0, 4) || 'file'}</div>
 const FolderIcon = ({ c }) => <svg width="46" height="46" viewBox="0 0 24 24" fill={c || '#374845'}><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z" /></svg>
 const Logo = ({ h = 40 }) => <div className="logo"><img src={logo} alt="Ecogis Geomatic SAS" height={h} /><span className="appn">{APP}</span></div>
@@ -194,21 +213,32 @@ function Papelera({ perfil }) {
     }
     registrar('Restauró', x.nombre); cargar()
   }
-  const eliminar = async (t, x) => {
-    if (!confirm(`¿Eliminar "${x.nombre}" para siempre? No se puede deshacer.`)) return
-    setMsg('')
-    if (t === 'd') { const { error } = await supabase.from('documents').delete().eq('id', x.id); if (error) return setMsg(error.message); await supabase.storage.from('documentos').remove([x.path]) }
-    else {
-      const ids = sub(x.id, x.deleted_at); const { data } = await supabase.from('documents').select('path').in('folder_id', ids)
-      const { error } = await supabase.from('folders').delete().eq('id', x.id); if (error) return setMsg(error.message)
-      if (data?.length) await supabase.storage.from('documentos').remove(data.map(r => r.path))
+  const eliminar = async (t, x, auto) => {
+    if (!auto && !confirm(`¿Eliminar "${x.nombre}" para siempre? No se puede deshacer.`)) return
+    setMsg(''); let paths = []
+    if (t === 'd') {
+      paths = [x.path]; const { data: vs } = await supabase.from('document_versions').select('path').eq('document_id', x.id); paths.push(...(vs || []).map(r => r.path))
+    } else {
+      const ids = sub(x.id, x.deleted_at); const { data } = await supabase.from('documents').select('id,path').in('folder_id', ids)
+      paths = (data || []).map(r => r.path)
+      const { data: vs } = await supabase.from('document_versions').select('path').in('document_id', (data || []).map(r => r.id)); paths.push(...(vs || []).map(r => r.path))
     }
-    registrar('Eliminó definitivamente', x.nombre); cargar()
+    const { error } = await supabase.from(t === 'd' ? 'documents' : 'folders').delete().eq('id', x.id); if (error) return setMsg(error.message)
+    if (paths.length) await supabase.storage.from('documentos').remove(paths)
+    registrar('Eliminó definitivamente', x.nombre); if (!auto) cargar()
+  }
+  const vaciarVencidos = async () => {
+    const v = [...raizF.filter(f => dias(f.deleted_at) < 0).map(f => ['f', f]), ...raizD.filter(d => dias(d.deleted_at) < 0).map(d => ['d', d])]
+    if (!v.length) return setMsg('No hay elementos vencidos.')
+    if (!confirm(`¿Eliminar para siempre ${v.length} elemento(s) con más de 30 días en la papelera?`)) return
+    for (const [t, x] of v) await eliminar(t, x, true)
+    cargar()
   }
   const fila = (t, x) => <tr key={t + x.id}><td>{x.nombre}</td><td>{t === 'f' ? 'Carpeta' : 'Archivo'}</td><td>{fecha(x.deleted_at)}</td><td>{dias(x.deleted_at) >= 0 ? `${dias(x.deleted_at)} días` : 'Vencido'}</td>
     <td><button className="chip si" onClick={() => restaurar(t, x)}>Restaurar</button> <button className="chip no" onClick={() => eliminar(t, x)}>Eliminar para siempre</button></td></tr>
   return (
     <div className="panel solo"><h2>Papelera</h2><p className="muted">Lo que eliminas queda aquí y puedes restaurarlo. Pasados 30 días se considera vencido y un administrador puede eliminarlo para siempre.</p>
+      {perfil.rol === 'admin' && <button className="btn ghost" onClick={vaciarVencidos}>Vaciar vencidos (más de 30 días)</button>}
       {msg && <p className="msg">{msg}</p>}
       {!raizF.length && !raizD.length ? <div className="vacio">La papelera está vacía</div>
         : <table><thead><tr><th>Nombre</th><th>Tipo</th><th>Eliminado</th><th>Quedan</th><th /></tr></thead><tbody>{raizF.map(f => fila('f', f))}{raizD.map(d => fila('d', d))}</tbody></table>}
@@ -227,12 +257,38 @@ function Actividad() {
   )
 }
 
+function Ficha({ d, onClose, onChange }) {
+  const [f, setF] = useState({ codigo: d.codigo || '', version: d.version || '1.0', estado: d.estado || 'vigente', categoria: d.categoria || 'Otro' })
+  const [vs, setVs] = useState([]), [msg, setMsg] = useState('')
+  useEffect(() => { supabase.from('document_versions').select('*').eq('document_id', d.id).order('created_at', { ascending: false }).then(({ data }) => setVs(data || [])) }, [d.id])
+  const guardar = async () => {
+    const { error } = await supabase.from('documents').update(f).eq('id', d.id); if (error) return setMsg(error.message)
+    registrar('Actualizó propiedades', `${d.nombre} · v${f.version} · ${ESTADOS[f.estado]}`); onChange(); onClose()
+  }
+  const bajar = async v => { const u = await signed(v.path, v.nombre); if (u) { registrar('Descargó versión anterior', `${v.nombre} v${v.version}`); window.open(u, '_blank') } }
+  const set = k => e => setF({ ...f, [k]: e.target.value })
+  return (
+    <div className="modal" onClick={onClose}><div className="dlg" onClick={e => e.stopPropagation()}>
+      <h3>Propiedades: {d.nombre}</h3>
+      <div className="frm">
+        <label>Código del documento<input placeholder="ej. PR-GP-002" value={f.codigo} onChange={set('codigo')} /></label>
+        <label>Versión<input value={f.version} onChange={set('version')} /></label>
+        <label>Estado<select value={f.estado} onChange={set('estado')}>{Object.entries(ESTADOS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+        <label>Tipo de documento<select value={f.categoria} onChange={set('categoria')}>{TIPOS.map(t => <option key={t}>{t}</option>)}</select></label>
+      </div>
+      {vs.length > 0 && <><b>Versiones anteriores</b>{vs.map(v => <div className="lnk" key={v.id}><span>v{v.version} · reemplazada el {fecha(v.created_at)} · {fmt(v.tamano)}</span><button className="btn ghost" onClick={() => bajar(v)}>Descargar</button></div>)}</>}
+      {msg && <p className="msg">{msg}</p>}
+      <div className="dact"><button className="btn ghost" onClick={onClose}>Cancelar</button><button className="btn" onClick={guardar}>Guardar</button></div>
+    </div></div>
+  )
+}
+
 function Drive({ perfil, q }) {
   const [folders, setFolders] = useState([]), [docs, setDocs] = useState([]), [cur, setCur] = useState(null), [idx, setIdx] = useState(0)
   const [vista, setVista] = useState('grid'), [ft, setFt] = useState(''), [menu, setMenu] = useState(null), [nuevo, setNuevo] = useState(false)
   const [prev, setPrev] = useState(null), [share, setShare] = useState(null), [pend, setPend] = useState(null)
-  const [over, setOver] = useState(false), [busy, setBusy] = useState(false), [msg, setMsg] = useState(''), [rec, setRec] = useState(false), [uso, setUso] = useState(0), [perm, setPerm] = useState(null)
-  const drag = useRef(null), inp = useRef(), mx = useRef(0)
+  const [over, setOver] = useState(false), [busy, setBusy] = useState(false), [msg, setMsg] = useState(''), [rec, setRec] = useState(false), [uso, setUso] = useState(0), [perm, setPerm] = useState(null), [prog, setProg] = useState(null), [ficha, setFicha] = useState(null)
+  const drag = useRef(null), inp = useRef(), mx = useRef(0), nvInp = useRef(), nvDoc = useRef(null)
 
   const cargar = useCallback(async () => {
     const { data: f } = await supabase.from('folders').select('*').is('deleted_at', null).order('nombre'); setFolders(f || [])
@@ -274,12 +330,61 @@ function Drive({ perfil, q }) {
     await supabase.from('folders').insert(SUB_PROYECTO.map(n => ({ nombre: n, parent_id: data.id, color: '#2a2aff', created_by: perfil.id })))
     await cargar(); ir(data.id)
   }
+  const enviar = async (file, path, nombre) => {
+    setProg({ nombre, pct: 0 })
+    try {
+      if (file.size > 6 * 1024 * 1024) return await subirGrande(file, path, pct => setProg({ nombre, pct }))
+      const { error } = await supabase.storage.from('documentos').upload(path, file); return error
+    } catch (e) { return { message: 'No se pudo subir: ' + (e.message || e) } } finally { setProg(null) }
+  }
+  const nuevaVersion = async file => {
+    const d = nvDoc.current; if (!file || !d) return
+    const pt = (d.version || '1.0').split('.'); pt[pt.length - 1] = String((parseInt(pt[pt.length - 1]) || 0) + 1)
+    const ver = prompt('Número de la nueva versión:', pt.join('.')); if (!ver?.trim()) return
+    setBusy(true); setMsg('')
+    const path = `${d.folder_id || 'raiz'}/${Date.now()}-${file.name.replace(/[^\w.\-]/g, '_')}`
+    const ue = await enviar(file, path, file.name); if (ue) { setBusy(false); return setMsg(ue.message) }
+    await supabase.from('document_versions').insert({ document_id: d.id, version: d.version, path: d.path, tamano: d.tamano, nombre: d.nombre, created_by: perfil.id })
+    const { error } = await supabase.from('documents').update({ path, tamano: file.size, tipo: file.type, version: ver.trim() }).eq('id', d.id)
+    if (error) setMsg(error.message); else registrar('Subió nueva versión', `${d.nombre} → v${ver.trim()}`)
+    setBusy(false); cargar()
+  }
+  const bajarZip = async f => {
+    setMsg('Preparando ZIP…')
+    const ids = descend(f.id)
+    const { data } = await supabase.from('documents').select('*').in('folder_id', ids).is('deleted_at', null)
+    if (!data?.length) return setMsg('La carpeta no tiene archivos.')
+    const total = data.reduce((a, d) => a + (d.tamano || 0), 0)
+    if (total > 500 * 1048576 && !confirm(`El ZIP pesa ${fmt(total)} y puede ser lento o fallar en el navegador. ¿Continuar?`)) return setMsg('')
+    try {
+      await cargarLib('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js', 'JSZip')
+      const zip = new window.JSZip(); let n = 0
+      const ruta = id => { const r = []; for (let x = folders.find(y => y.id === id); x && x.id !== f.parent_id; x = folders.find(y => y.id === x.parent_id)) r.unshift(x.nombre); return r.join('/') }
+      for (const d of data) {
+        const u = await signed(d.path); if (!u) continue
+        zip.file(`${ruta(d.folder_id)}/${d.nombre}`, await (await fetch(u)).blob()); setMsg(`Armando ZIP… ${++n}/${data.length}`)
+      }
+      const out = await zip.generateAsync({ type: 'blob' })
+      const a = document.createElement('a'); a.href = URL.createObjectURL(out); a.download = `${f.nombre}.zip`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60000)
+      registrar('Descargó carpeta en ZIP', f.nombre); setMsg('')
+    } catch { setMsg('No se pudo armar el ZIP. Prueba con una carpeta más pequeña.') }
+  }
+  const exportarMaestro = async () => {
+    setMsg('Generando listado maestro…')
+    const { data } = await supabase.from('documents').select('*').is('deleted_at', null).order('nombre')
+    try { await cargarLib('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'XLSX') } catch { return setMsg('No se pudo cargar el generador de Excel.') }
+    const ruta = id => { const r = []; for (let x = folders.find(y => y.id === id); x; x = folders.find(y => y.id === x.parent_id)) r.unshift(x.nombre); return r.join(' / ') || 'Raíz' }
+    const filas = (data || []).map(d => ({ 'Código': d.codigo || '', Documento: d.nombre, Tipo: d.categoria || '', 'Versión': d.version, Estado: ESTADOS[d.estado] || d.estado, Carpeta: ruta(d.folder_id), 'Subido por': d.uploaded_by_nombre || '', Fecha: fecha(d.created_at), 'Tamaño (KB)': Math.ceil((d.tamano || 0) / 1024) }))
+    const wb = window.XLSX.utils.book_new(); window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(filas), 'Listado maestro')
+    window.XLSX.writeFile(wb, `Listado-Maestro_${new Date().toISOString().slice(0, 10).replaceAll('-', '')}.xlsx`)
+    registrar('Exportó listado maestro', `${filas.length} documentos`); setMsg('')
+  }
   const preparar = files => files.length && setPend(files.map(file => ({ file, tipo: detectar(file.name) })))
   const subir = async arr => {
     setPend(null); setBusy(true); setMsg('')
     for (const { file, tipo } of arr) {
       const path = `${cur || 'raiz'}/${Date.now()}-${file.name.replace(/[^\w.\-]/g, '_')}`
-      const u = await supabase.storage.from('documentos').upload(path, file); if (u.error) { setMsg(u.error.message); continue }
+      const ue = await enviar(file, path, file.name); if (ue) { setMsg(ue.message); continue }
       const { error } = await supabase.from('documents').insert({ folder_id: cur, nombre: file.name, path, tamano: file.size, tipo: file.type, categoria: tipo, uploaded_by: perfil.id, uploaded_by_nombre: perfil.nombre || perfil.email })
       if (error) setMsg(error.message); else registrar('Subió', file.name)
     }
@@ -317,7 +422,7 @@ function Drive({ perfil, q }) {
       <div key={t + x.id} className="it" draggable onDragStart={e => { drag.current = { tipo: t, id: x.id }; e.dataTransfer.effectAllowed = 'move' }} onDragEnd={() => { drag.current = null }}
         onClick={() => (f ? ir(x.id) : setPrev(x))} onContextMenu={e => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, t, i: x }) }} {...(f ? dnd(x.id) : {})}>
         <div className="ic">{f ? <FolderIcon c={x.color} /> : <FileIcon n={x.nombre} />}</div>
-        <div className="nm" title={x.nombre}>{x.nombre}{x.restringida ? ' 🔒' : ''}</div>
+        <div className="nm" title={x.nombre}>{x.nombre}{x.restringida ? ' 🔒' : ''}{!f && x.estado && x.estado !== 'vigente' && <span className={'est ' + x.estado}>{ESTADOS[x.estado]}</span>}</div>
         <div className="meta">{f ? 'Carpeta' : x.categoria || '—'}</div><div className="meta">{f ? '' : fmt(x.tamano)}</div><div className="meta">{f ? '' : x.uploaded_by_nombre}</div><div className="meta">{fecha(x.created_at)}</div>
         <button className="dots" aria-label="Más opciones" onClick={e => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: r.left - 140, y: r.bottom, t, i: x }) }}>⋮</button>
       </div>
@@ -334,11 +439,13 @@ function Drive({ perfil, q }) {
             <button onClick={() => { setNuevo(false); crearCarpeta() }}>Nueva carpeta</button>
             <button onClick={() => { setNuevo(false); inp.current.click() }}>Subir archivos</button></div>}
           <input ref={inp} type="file" multiple hidden onChange={e => { preparar([...e.target.files]); e.target.value = '' }} />
+          <input ref={nvInp} type="file" hidden onChange={e => { nuevaVersion(e.target.files[0]); e.target.value = '' }} />
         </div>
         <button className={'nav' + (!cur && !q && !rec ? ' on' : '')} onClick={() => ir(null)} {...dnd(null)}>Unidad de Ecogis</button>
         <button className={'nav' + (rec && !q ? ' on' : '')} onClick={() => setRec(true)}>Recientes</button>
         <div className="sub">Proyectos</div>
         {folders.filter(f => !f.parent_id).map(f => <button key={f.id} className={'nav small' + (ruta[0]?.id === f.id ? ' on' : '')} onClick={() => ir(f.id)} {...dnd(f.id)}><i style={{ background: f.color || '#374845' }} />{f.nombre}</button>)}
+        {perfil.rol === 'admin' && <button className="nav small" onClick={exportarMaestro}>⬇ Listado maestro (Excel)</button>}
         <div className="uso"><div className="barra"><i style={{ width: Math.min(100, (uso / 1073741824) * 100) + '%' }} /></div><small>{uso ? fmt(uso) : '0 KB'} usados de 1 GB</small></div>
       </aside>
       <main className={'panel' + (over ? ' over' : '')} {...dz}>
@@ -355,7 +462,7 @@ function Drive({ perfil, q }) {
           <select className="ftipo" value={ft} onChange={e => setFt(e.target.value)}><option value="">Todos los tipos</option>{TIPOS.map(t => <option key={t}>{t}</option>)}</select>
           <div className="seg"><button className={vista === 'list' ? 'on' : ''} onClick={() => setVista('list')} title="Lista">☰</button><button className={vista === 'grid' ? 'on' : ''} onClick={() => setVista('grid')} title="Cuadrícula">▦</button></div>
         </div>
-        {busy && <p className="msg ok">Subiendo archivos…</p>}{msg && <p className="msg">{msg}</p>}
+        {busy && <p className="msg ok">{prog ? `Subiendo ${prog.nombre}… ${prog.pct}%` : 'Subiendo archivos…'}</p>}{msg && <p className="msg">{msg}</p>}
         {vista === 'list' && subs.length + lista.length > 0 && <div className="it head"><div /><div>Nombre</div><div>Tipo</div><div>Tamaño</div><div>Subido por</div><div>Fecha</div><div /></div>}
         <div className={vista}>{subs.map(f => item('f', f))}{lista.map(d => item('d', d))}</div>
         {subs.length + lista.length === 0 && <div className="vacio"><b>{q ? 'Sin resultados' : 'Aquí no hay nada todavía'}</b><p>{q ? 'Prueba con otro nombre.' : 'Arrastra archivos o usa el botón Nuevo.'}</p></div>}
@@ -366,6 +473,9 @@ function Drive({ perfil, q }) {
         <button onClick={() => { setShare(menu); setMenu(null) }}>Compartir</button>
         {menu.t === 'f' && perfil.rol === 'admin' && <button onClick={() => { setPerm(menu.i); setMenu(null) }}>Permisos y privacidad</button>}
         {menu.t === 'd' && <button onClick={() => { descargar(menu.i); setMenu(null) }}>Descargar</button>}
+        {menu.t === 'd' && <button onClick={() => { setFicha(menu.i); setMenu(null) }}>Propiedades y versiones</button>}
+        {menu.t === 'd' && <button onClick={() => { nvDoc.current = menu.i; nvInp.current.click(); setMenu(null) }}>Subir nueva versión</button>}
+        {menu.t === 'f' && <button onClick={() => { bajarZip(menu.i); setMenu(null) }}>Descargar como ZIP</button>}
         <button onClick={() => { renombrar(menu.t, menu.i); setMenu(null) }}>Cambiar nombre</button>
         {menu.t === 'f' && <div className="sw">{COLORES.map(c => <button key={c} aria-label={'Color ' + c} style={{ background: c }} onClick={() => colorear(menu.i, c)} />)}</div>}
         <button className="rojo" onClick={() => { borrar(menu.t, menu.i); setMenu(null) }}>Enviar a la papelera</button>
@@ -373,6 +483,7 @@ function Drive({ perfil, q }) {
       {prev && <Preview d={prev} onClose={() => setPrev(null)} />}
       {share && <Compartir t={share.t} i={share.i} perfil={perfil} onClose={() => setShare(null)} />}
       {perm && <Permisos f={perm} onClose={() => setPerm(null)} onChange={cargar} />}
+      {ficha && <Ficha d={ficha} onClose={() => setFicha(null)} onChange={cargar} />}
       {pend && <div className="modal" onClick={() => setPend(null)}><div className="dlg" onClick={e => e.stopPropagation()}>
         <h3>Subir {pend.length} archivo{pend.length > 1 ? 's' : ''}</h3><p className="muted">El formato se reconoce solo. Cambia el tipo de documento si hace falta.</p>
         <div className="plist">{pend.map((p, k) => <div key={k} className="prow"><FileIcon n={p.file.name} /><div className="nm">{p.file.name}<small>{ext(p.file.name).toUpperCase() || 'Archivo'} · {fmt(p.file.size)}</small></div>
