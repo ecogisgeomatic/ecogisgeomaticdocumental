@@ -3,6 +3,8 @@ import { supabase } from './supabase'
 import logo from './logo.svg'
 
 const APP = 'Geoteca Ecogis'
+let ACTOR = null
+const registrar = (accion, detalle) => { if (ACTOR) supabase.from('activity').insert({ user_id: ACTOR.id, user_nombre: ACTOR.nombre || ACTOR.email, accion, detalle }).then(() => {}) }
 const SUB_PROYECTO = ['01_Contrato-y-Propuesta', '02_Planeacion', '03_Captura-de-Campo', '04_Procesamiento-y-Analisis', '05_Control-de-Calidad', '06_Entregables', '07_Cierre-y-Evaluacion']
 
 const TIPOS = ['Contrato', 'Informe técnico', 'Cartografía / SIG', 'Plano / CAD', 'Hoja de cálculo', 'Presentación', 'Imagen', 'Facturación', 'Legal', 'Otro']
@@ -46,7 +48,7 @@ function Preview({ d, onClose }) {
       } catch { setErr('No se pudo generar la vista previa. Descárgalo para abrirlo.') }
     })()
   }, [d])
-  const bajar = async () => { const x = await signed(d.path, d.nombre); x && window.open(x, '_blank') }
+  const bajar = async () => { const x = await signed(d.path, d.nombre); if (x) { registrar('Descargó', d.nombre); window.open(x, '_blank') } }
   return (
     <div className="modal" onClick={onClose}><div className="pv" onClick={e => e.stopPropagation()}>
       <div className="pvh"><b>{d.nombre}</b><span><button className="btn" onClick={bajar}>Descargar</button> <button className="btn ghost" onClick={onClose}>Cerrar</button></span></div>
@@ -71,7 +73,7 @@ function Compartir({ t, i, perfil, onClose }) {
   }, [i.id, tipo])
   useEffect(() => { cargar() }, [cargar])
   const crear = async () => {
-    await supabase.from('shares').insert({ item_type: tipo, item_id: i.id, expires_at: exp === '0' ? null : new Date(Date.now() + exp * 864e5).toISOString(), created_by: perfil.id }); cargar()
+    await supabase.from('shares').insert({ item_type: tipo, item_id: i.id, expires_at: exp === '0' ? null : new Date(Date.now() + exp * 864e5).toISOString(), created_by: perfil.id }); registrar('Creó enlace para compartir', i.nombre); cargar()
   }
   const link = s => `${location.origin}/?s=${s.token}`
   return (
@@ -128,7 +130,100 @@ function Auth() {
       <input type="password" placeholder="Contraseña (mínimo 6)" minLength={6} required value={f.pass} onChange={set('pass')} />
       <button className="btn">{modo === 'in' ? 'Ingresar' : 'Crear cuenta'}</button>{msg && <p className="msg">{msg}</p>}
       <a href="#" onClick={e => { e.preventDefault(); setModo(modo === 'in' ? 'up' : 'in'); setMsg('') }}>{modo === 'in' ? 'Crear una cuenta nueva' : 'Ya tengo cuenta'}</a>
+      {modo === 'in' && <a href="#" onClick={async e => { e.preventDefault(); if (!f.email) return setMsg('Escribe tu correo arriba y vuelve a pulsar aquí.'); const { error } = await supabase.auth.resetPasswordForEmail(f.email, { redirectTo: window.location.origin }); setMsg(error ? error.message : 'Te enviamos un enlace para crear una contraseña nueva. Revisa tu correo.') }}>¿Olvidaste tu contraseña?</a>}
     </form></div>
+  )
+}
+
+function NuevaClave({ onListo }) {
+  const [p, setP] = useState(''), [msg, setMsg] = useState('')
+  const guardar = async e => { e.preventDefault(); const { error } = await supabase.auth.updateUser({ password: p }); if (error) setMsg(error.message); else onListo() }
+  return <div className="auth"><form onSubmit={guardar} className="auth-box"><Logo /><h2>Crea tu nueva contraseña</h2>
+    <input type="password" minLength={6} required placeholder="Nueva contraseña (mínimo 6)" value={p} onChange={e => setP(e.target.value)} />
+    <button className="btn">Guardar contraseña</button>{msg && <p className="msg">{msg}</p>}</form></div>
+}
+
+function Permisos({ f, onClose, onChange }) {
+  const [users, setUsers] = useState([]), [acc, setAcc] = useState([]), [priv, setPriv] = useState(!!f.restringida)
+  const cargar = useCallback(async () => {
+    const { data: u } = await supabase.from('profiles').select('id,nombre,email,rol').eq('activo', true).order('nombre'); setUsers(u || [])
+    const { data: a } = await supabase.from('folder_access').select('user_id').eq('folder_id', f.id); setAcc((a || []).map(x => x.user_id))
+  }, [f.id])
+  useEffect(() => { cargar() }, [cargar])
+  const alternar = async () => {
+    const { error } = await supabase.from('folders').update({ restringida: !priv }).eq('id', f.id); if (error) return
+    setPriv(!priv); registrar(!priv ? 'Hizo privada la carpeta' : 'Quitó la privacidad de la carpeta', f.nombre); onChange()
+  }
+  const dar = async (u, on) => {
+    if (on) await supabase.from('folder_access').insert({ folder_id: f.id, user_id: u.id }); else await supabase.from('folder_access').delete().eq('folder_id', f.id).eq('user_id', u.id)
+    registrar(on ? 'Dio acceso' : 'Quitó acceso', `${f.nombre} → ${u.nombre || u.email}`); cargar()
+  }
+  const miembros = users.filter(u => u.rol !== 'admin')
+  return (
+    <div className="modal" onClick={onClose}><div className="dlg" onClick={e => e.stopPropagation()}>
+      <h3>Permisos: {f.nombre}</h3>
+      <label className="chk"><input type="checkbox" checked={priv} onChange={alternar} /> Carpeta privada: solo las personas marcadas y los administradores</label>
+      <p className="muted">Aplica también a todas sus subcarpetas y archivos.</p>
+      {priv && <div className="plist">{miembros.map(u => <label key={u.id} className="prow chk"><input type="checkbox" checked={acc.includes(u.id)} onChange={e => dar(u, e.target.checked)} /> {u.nombre || u.email}</label>)}{!miembros.length && <p className="muted">Aún no hay miembros activos.</p>}</div>}
+      <div className="dact"><button className="btn" onClick={onClose}>Listo</button></div>
+    </div></div>
+  )
+}
+
+function Papelera({ perfil }) {
+  const [fs, setFs] = useState([]), [ds, setDs] = useState([]), [msg, setMsg] = useState('')
+  const cargar = useCallback(async () => {
+    const { data: f } = await supabase.from('folders').select('*'); const { data: d } = await supabase.from('documents').select('*').not('deleted_at', 'is', null)
+    setFs(f || []); setDs(d || [])
+  }, [])
+  useEffect(() => { cargar() }, [cargar])
+  const raizF = fs.filter(f => f.deleted_at && !(fs.find(x => x.id === f.parent_id)?.deleted_at === f.deleted_at))
+  const raizD = ds.filter(d => fs.find(x => x.id === d.folder_id)?.deleted_at !== d.deleted_at)
+  const dias = ts => 30 - Math.floor((Date.now() - new Date(ts)) / 864e5)
+  const sub = (id, ts) => [id, ...fs.filter(f => f.parent_id === id && f.deleted_at === ts).flatMap(f => sub(f.id, ts))]
+  const restaurar = async (t, x) => {
+    setMsg('')
+    if (t === 'd') {
+      const vivo = !x.folder_id || fs.some(f => f.id === x.folder_id && !f.deleted_at)
+      const { error } = await supabase.from('documents').update({ deleted_at: null, ...(vivo ? {} : { folder_id: null }) }).eq('id', x.id); if (error) return setMsg(error.message)
+    } else {
+      const ids = sub(x.id, x.deleted_at), padreVivo = !x.parent_id || fs.some(f => f.id === x.parent_id && !f.deleted_at)
+      const { error } = await supabase.from('folders').update({ deleted_at: null }).in('id', ids).eq('deleted_at', x.deleted_at); if (error) return setMsg(error.message)
+      if (!padreVivo) await supabase.from('folders').update({ parent_id: null }).eq('id', x.id)
+      await supabase.from('documents').update({ deleted_at: null }).in('folder_id', ids).eq('deleted_at', x.deleted_at)
+    }
+    registrar('Restauró', x.nombre); cargar()
+  }
+  const eliminar = async (t, x) => {
+    if (!confirm(`¿Eliminar "${x.nombre}" para siempre? No se puede deshacer.`)) return
+    setMsg('')
+    if (t === 'd') { const { error } = await supabase.from('documents').delete().eq('id', x.id); if (error) return setMsg(error.message); await supabase.storage.from('documentos').remove([x.path]) }
+    else {
+      const ids = sub(x.id, x.deleted_at); const { data } = await supabase.from('documents').select('path').in('folder_id', ids)
+      const { error } = await supabase.from('folders').delete().eq('id', x.id); if (error) return setMsg(error.message)
+      if (data?.length) await supabase.storage.from('documentos').remove(data.map(r => r.path))
+    }
+    registrar('Eliminó definitivamente', x.nombre); cargar()
+  }
+  const fila = (t, x) => <tr key={t + x.id}><td>{x.nombre}</td><td>{t === 'f' ? 'Carpeta' : 'Archivo'}</td><td>{fecha(x.deleted_at)}</td><td>{dias(x.deleted_at) >= 0 ? `${dias(x.deleted_at)} días` : 'Vencido'}</td>
+    <td><button className="chip si" onClick={() => restaurar(t, x)}>Restaurar</button> <button className="chip no" onClick={() => eliminar(t, x)}>Eliminar para siempre</button></td></tr>
+  return (
+    <div className="panel solo"><h2>Papelera</h2><p className="muted">Lo que eliminas queda aquí y puedes restaurarlo. Pasados 30 días se considera vencido y un administrador puede eliminarlo para siempre.</p>
+      {msg && <p className="msg">{msg}</p>}
+      {!raizF.length && !raizD.length ? <div className="vacio">La papelera está vacía</div>
+        : <table><thead><tr><th>Nombre</th><th>Tipo</th><th>Eliminado</th><th>Quedan</th><th /></tr></thead><tbody>{raizF.map(f => fila('f', f))}{raizD.map(d => fila('d', d))}</tbody></table>}
+    </div>
+  )
+}
+
+function Actividad() {
+  const [l, setL] = useState([])
+  useEffect(() => { supabase.from('activity').select('*').order('created_at', { ascending: false }).limit(300).then(({ data }) => setL(data || [])) }, [])
+  return (
+    <div className="panel solo"><h2>Registro de actividad</h2><p className="muted">Últimos 300 movimientos hechos desde la página.</p>
+      <table><thead><tr><th>Fecha</th><th>Persona</th><th>Acción</th><th>Detalle</th></tr></thead>
+        <tbody>{l.map(a => <tr key={a.id}><td>{new Date(a.created_at).toLocaleString('es-CO')}</td><td>{a.user_nombre}</td><td>{a.accion}</td><td>{a.detalle}</td></tr>)}</tbody></table>
+    </div>
   )
 }
 
@@ -136,14 +231,14 @@ function Drive({ perfil, q }) {
   const [folders, setFolders] = useState([]), [docs, setDocs] = useState([]), [cur, setCur] = useState(null), [idx, setIdx] = useState(0)
   const [vista, setVista] = useState('grid'), [ft, setFt] = useState(''), [menu, setMenu] = useState(null), [nuevo, setNuevo] = useState(false)
   const [prev, setPrev] = useState(null), [share, setShare] = useState(null), [pend, setPend] = useState(null)
-  const [over, setOver] = useState(false), [busy, setBusy] = useState(false), [msg, setMsg] = useState(''), [rec, setRec] = useState(false), [uso, setUso] = useState(0)
+  const [over, setOver] = useState(false), [busy, setBusy] = useState(false), [msg, setMsg] = useState(''), [rec, setRec] = useState(false), [uso, setUso] = useState(0), [perm, setPerm] = useState(null)
   const drag = useRef(null), inp = useRef(), mx = useRef(0)
 
   const cargar = useCallback(async () => {
-    const { data: f } = await supabase.from('folders').select('*').order('nombre'); setFolders(f || [])
+    const { data: f } = await supabase.from('folders').select('*').is('deleted_at', null).order('nombre'); setFolders(f || [])
     let qq = supabase.from('documents').select('*').order('nombre')
     qq = q ? qq.ilike('nombre', `%${q}%`) : rec ? supabase.from('documents').select('*').order('created_at', { ascending: false }).limit(30) : cur ? qq.eq('folder_id', cur) : qq.is('folder_id', null)
-    const { data: d } = await qq; setDocs(d || [])
+    const { data: d } = await qq.is('deleted_at', null); setDocs(d || [])
     const { data: u } = await supabase.from('documents').select('tamano'); setUso((u || []).reduce((a, x) => a + (x.tamano || 0), 0))
   }, [cur, q, rec])
   useEffect(() => { cargar() }, [cargar])
@@ -186,25 +281,24 @@ function Drive({ perfil, q }) {
       const path = `${cur || 'raiz'}/${Date.now()}-${file.name.replace(/[^\w.\-]/g, '_')}`
       const u = await supabase.storage.from('documentos').upload(path, file); if (u.error) { setMsg(u.error.message); continue }
       const { error } = await supabase.from('documents').insert({ folder_id: cur, nombre: file.name, path, tamano: file.size, tipo: file.type, categoria: tipo, uploaded_by: perfil.id, uploaded_by_nombre: perfil.nombre || perfil.email })
-      if (error) setMsg(error.message)
+      if (error) setMsg(error.message); else registrar('Subió', file.name)
     }
     setBusy(false); cargar()
   }
-  const descargar = async d => { const u = await signed(d.path, d.nombre); u && window.open(u, '_blank') }
+  const descargar = async d => { const u = await signed(d.path, d.nombre); if (u) { registrar('Descargó', d.nombre); window.open(u, '_blank') } }
   const renombrar = async (t, x) => { const n = prompt('Nuevo nombre:', x.nombre); if (!n?.trim()) return; await supabase.from(t === 'f' ? 'folders' : 'documents').update({ nombre: n.trim() }).eq('id', x.id); cargar() }
   const colorear = async (f, c) => { await supabase.from('folders').update({ color: c }).eq('id', f.id); setMenu(null); cargar() }
   const borrar = async (t, x) => {
-    if (!confirm(`¿Eliminar "${x.nombre}"${t === 'f' ? ' con todo su contenido' : ''}?`)) return
-    if (t === 'd') {
-      const { error } = await supabase.from('documents').delete().eq('id', x.id); if (error) return setMsg(error.message)
-      await supabase.storage.from('documentos').remove([x.path])
-    } else {
-      const ids = descend(x.id); const { data } = await supabase.from('documents').select('path').in('folder_id', ids)
-      const { error } = await supabase.from('folders').delete().eq('id', x.id); if (error) return setMsg(error.message)
-      if (data?.length) await supabase.storage.from('documentos').remove(data.map(r => r.path))
+    if (!confirm(`¿Enviar "${x.nombre}" a la papelera?${t === 'f' ? ' Se incluye todo su contenido.' : ''} Podrás restaurarlo.`)) return
+    const ts = new Date().toISOString(); setMsg('')
+    if (t === 'd') { const { error } = await supabase.from('documents').update({ deleted_at: ts }).eq('id', x.id); if (error) return setMsg(error.message) }
+    else {
+      const ids = descend(x.id)
+      const { error } = await supabase.from('folders').update({ deleted_at: ts }).in('id', ids).is('deleted_at', null); if (error) return setMsg(error.message)
+      await supabase.from('documents').update({ deleted_at: ts }).in('folder_id', ids).is('deleted_at', null)
       if (ids.includes(cur)) ir(x.parent_id)
     }
-    cargar()
+    registrar('Envió a la papelera', x.nombre); cargar()
   }
   const mover = async dest => {
     const d = drag.current; drag.current = null; if (!d) return
@@ -223,7 +317,7 @@ function Drive({ perfil, q }) {
       <div key={t + x.id} className="it" draggable onDragStart={e => { drag.current = { tipo: t, id: x.id }; e.dataTransfer.effectAllowed = 'move' }} onDragEnd={() => { drag.current = null }}
         onClick={() => (f ? ir(x.id) : setPrev(x))} onContextMenu={e => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, t, i: x }) }} {...(f ? dnd(x.id) : {})}>
         <div className="ic">{f ? <FolderIcon c={x.color} /> : <FileIcon n={x.nombre} />}</div>
-        <div className="nm" title={x.nombre}>{x.nombre}</div>
+        <div className="nm" title={x.nombre}>{x.nombre}{x.restringida ? ' 🔒' : ''}</div>
         <div className="meta">{f ? 'Carpeta' : x.categoria || '—'}</div><div className="meta">{f ? '' : fmt(x.tamano)}</div><div className="meta">{f ? '' : x.uploaded_by_nombre}</div><div className="meta">{fecha(x.created_at)}</div>
         <button className="dots" aria-label="Más opciones" onClick={e => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: r.left - 140, y: r.bottom, t, i: x }) }}>⋮</button>
       </div>
@@ -270,13 +364,15 @@ function Drive({ perfil, q }) {
       {menu && <div className="ctx" style={{ left: Math.min(menu.x, window.innerWidth - 200), top: Math.min(menu.y, window.innerHeight - 260) }} onClick={e => e.stopPropagation()}>
         <button onClick={() => { menu.t === 'f' ? ir(menu.i.id) : setPrev(menu.i); setMenu(null) }}>Abrir</button>
         <button onClick={() => { setShare(menu); setMenu(null) }}>Compartir</button>
+        {menu.t === 'f' && perfil.rol === 'admin' && <button onClick={() => { setPerm(menu.i); setMenu(null) }}>Permisos y privacidad</button>}
         {menu.t === 'd' && <button onClick={() => { descargar(menu.i); setMenu(null) }}>Descargar</button>}
         <button onClick={() => { renombrar(menu.t, menu.i); setMenu(null) }}>Cambiar nombre</button>
         {menu.t === 'f' && <div className="sw">{COLORES.map(c => <button key={c} aria-label={'Color ' + c} style={{ background: c }} onClick={() => colorear(menu.i, c)} />)}</div>}
-        <button className="rojo" onClick={() => { borrar(menu.t, menu.i); setMenu(null) }}>Eliminar</button>
+        <button className="rojo" onClick={() => { borrar(menu.t, menu.i); setMenu(null) }}>Enviar a la papelera</button>
       </div>}
       {prev && <Preview d={prev} onClose={() => setPrev(null)} />}
       {share && <Compartir t={share.t} i={share.i} perfil={perfil} onClose={() => setShare(null)} />}
+      {perm && <Permisos f={perm} onClose={() => setPerm(null)} onChange={cargar} />}
       {pend && <div className="modal" onClick={() => setPend(null)}><div className="dlg" onClick={e => e.stopPropagation()}>
         <h3>Subir {pend.length} archivo{pend.length > 1 ? 's' : ''}</h3><p className="muted">El formato se reconoce solo. Cambia el tipo de documento si hace falta.</p>
         <div className="plist">{pend.map((p, k) => <div key={k} className="prow"><FileIcon n={p.file.name} /><div className="nm">{p.file.name}<small>{ext(p.file.name).toUpperCase() || 'Archivo'} · {fmt(p.file.size)}</small></div>
@@ -351,17 +447,19 @@ function Accesos({ perfil }) {
 }
 
 function Principal() {
-  const [sesion, setSesion] = useState(undefined), [perfil, setPerfil] = useState(null), [vista, setVista] = useState('docs'), [q, setQ] = useState(''), [cuenta, setCuenta] = useState(false)
+  const [sesion, setSesion] = useState(undefined), [perfil, setPerfil] = useState(null), [vista, setVista] = useState('docs'), [q, setQ] = useState(''), [cuenta, setCuenta] = useState(false), [recuperar, setRecuperar] = useState(false)
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSesion(data.session))
-    const { data: s } = supabase.auth.onAuthStateChange((_e, ses) => setSesion(ses)); return () => s.subscription.unsubscribe()
+    const { data: s } = supabase.auth.onAuthStateChange((ev, ses) => { if (ev === 'PASSWORD_RECOVERY') setRecuperar(true); setSesion(ses) }); return () => s.subscription.unsubscribe()
   }, [])
   useEffect(() => {
     if (!sesion) return setPerfil(null)
     supabase.from('profiles').select('*').eq('id', sesion.user.id).single().then(({ data }) => setPerfil(data))
   }, [sesion])
   useEffect(() => { const c = () => setCuenta(false); window.addEventListener('click', c); return () => window.removeEventListener('click', c) }, [])
+  useEffect(() => { ACTOR = perfil }, [perfil])
   if (sesion === undefined) return null
+  if (recuperar) return <NuevaClave onListo={() => setRecuperar(false)} />
   if (!sesion) return <Auth />
   if (!perfil) return <p className="vacio">Cargando…</p>
   if (!perfil.activo) return <div className="auth"><div className="auth-box"><Logo /><h2>Cuenta pendiente de activación</h2><p className="muted">Un administrador de Ecogis debe activar tu acceso.</p><button className="btn" onClick={() => supabase.auth.signOut()}>Salir</button></div></div>
@@ -371,11 +469,13 @@ function Principal() {
         <input className="search" placeholder="Buscar en la unidad" value={q} onChange={e => { setQ(e.target.value); setVista('docs') }} />
         <button className={'tab' + (vista === 'docs' ? ' on' : '')} onClick={() => setVista('docs')}>Archivos</button>
         <button className={'tab' + (vista === 'links' ? ' on' : '')} onClick={() => setVista('links')}>Accesos rápidos</button>
+        <button className={'tab' + (vista === 'trash' ? ' on' : '')} onClick={() => setVista('trash')}>Papelera</button>
         {perfil.rol === 'admin' && <button className={'tab' + (vista === 'users' ? ' on' : '')} onClick={() => setVista('users')}>Usuarios</button>}
+        {perfil.rol === 'admin' && <button className={'tab' + (vista === 'log' ? ' on' : '')} onClick={() => setVista('log')}>Actividad</button>}
         <div className="avw"><button className="av" title="Mi cuenta" onClick={e => { e.stopPropagation(); setCuenta(!cuenta) }}>{(perfil.nombre || perfil.email || '?')[0].toUpperCase()}</button>
           {cuenta && <MiCuenta perfil={perfil} onNombre={n => setPerfil({ ...perfil, nombre: n })} />}</div>
       </header>
-      {vista === 'docs' ? <Drive perfil={perfil} q={q} /> : vista === 'links' ? <Accesos perfil={perfil} /> : <Usuarios perfil={perfil} />}
+      {vista === 'docs' ? <Drive perfil={perfil} q={q} /> : vista === 'links' ? <Accesos perfil={perfil} /> : vista === 'trash' ? <Papelera perfil={perfil} /> : vista === 'log' ? <Actividad /> : <Usuarios perfil={perfil} />}
     </div>
   )
 }

@@ -88,3 +88,5 @@ th{text-align:left;color:var(--mut);font-weight:normal}th,td{padding:10px 8px;bo
 .lki{width:42px;height:42px;border-radius:12px;color:#fff;font:bold 18px 'Trebuchet MS';display:grid;place-items:center;flex:none}
 .lk b{display:block;color:#000}.lk .x{position:absolute;top:6px;right:8px;background:none;border:0;color:var(--mut);opacity:0}.lk:hover .x{opacity:1}
 @media(max-width:800px){.appn{display:none}.top{flex-wrap:wrap}.search{order:5;flex-basis:100%;max-width:none}}
+
+.chk{display:flex;align-items:center;gap:10px;cursor:pointer;margin:6px 0}.chk input{width:18px;height:18px}
