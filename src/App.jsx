@@ -1,5 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from './supabase'
+import logo from './logo.svg'
+
+const APP = 'Geoteca Ecogis'
 
 const TIPOS = ['Contrato', 'Informe técnico', 'Cartografía / SIG', 'Plano / CAD', 'Hoja de cálculo', 'Presentación', 'Imagen', 'Facturación', 'Legal', 'Otro']
 const COLORES = ['#374845', '#2a2aff', '#00cdff', '#e53935', '#fb8c00', '#43a047', '#8e24aa', '#6d4c41']
@@ -28,13 +31,7 @@ const cargarMammoth = () => window.mammoth ? Promise.resolve() : new Promise((ok
 
 const FileIcon = ({ n }) => <div className="fi" style={{ background: COL[ext(n)] || '#546e7a' }}>{ext(n).slice(0, 4) || 'file'}</div>
 const FolderIcon = ({ c }) => <svg width="46" height="46" viewBox="0 0 24 24" fill={c || '#374845'}><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z" /></svg>
-const Logo = () => (
-  <div className="logo">
-    <svg width="30" height="34" viewBox="0 0 40 46"><defs><clipPath id="lg"><path d="M5 0h30a5 5 0 0 1 5 5v26a15 15 0 0 1-15 15H15A15 15 0 0 1 0 31V5a5 5 0 0 1 5-5z" /></clipPath></defs>
-      <g clipPath="url(#lg)"><polygon points="0,0 40,0 40,14 21,26 19,16 0,30" fill="#2a2aff" /><polygon points="0,30 19,16 19,46 0,46" fill="#374845" /><polygon points="21,26 40,14 40,46 21,46" fill="#00cdff" /></g><circle cx="20" cy="7" r="2.6" fill="#fff" /></svg>
-    <div><b>ecogis</b><i>geomatic</i></div>
-  </div>
-)
+const Logo = ({ h = 40 }) => <div className="logo"><img src={logo} alt="Ecogis Geomatic SAS" height={h} /><span className="appn">{APP}</span></div>
 
 function Preview({ d, onClose }) {
   const [u, setU] = useState(null), [html, setHtml] = useState(''), [txt, setTxt] = useState(''), [err, setErr] = useState('')
@@ -124,7 +121,7 @@ function Auth() {
     if (error) setMsg(error.message)
   }
   return (
-    <div className="auth"><form onSubmit={enviar} className="auth-box"><Logo /><p className="muted">Gestor documental</p>
+    <div className="auth"><form onSubmit={enviar} className="auth-box"><Logo /><p className="muted">Centro documental de Ecogis Geomatic</p>
       {modo === 'up' && <input placeholder="Nombre completo" required value={f.nombre} onChange={set('nombre')} />}
       <input type="email" placeholder="Correo" required value={f.email} onChange={set('email')} />
       <input type="password" placeholder="Contraseña (mínimo 6)" minLength={6} required value={f.pass} onChange={set('pass')} />
@@ -138,29 +135,30 @@ function Drive({ perfil, q }) {
   const [folders, setFolders] = useState([]), [docs, setDocs] = useState([]), [cur, setCur] = useState(null), [idx, setIdx] = useState(0)
   const [vista, setVista] = useState('grid'), [ft, setFt] = useState(''), [menu, setMenu] = useState(null), [nuevo, setNuevo] = useState(false)
   const [prev, setPrev] = useState(null), [share, setShare] = useState(null), [pend, setPend] = useState(null)
-  const [over, setOver] = useState(false), [busy, setBusy] = useState(false), [msg, setMsg] = useState('')
+  const [over, setOver] = useState(false), [busy, setBusy] = useState(false), [msg, setMsg] = useState(''), [rec, setRec] = useState(false), [uso, setUso] = useState(0)
   const drag = useRef(null), inp = useRef(), mx = useRef(0)
 
   const cargar = useCallback(async () => {
     const { data: f } = await supabase.from('folders').select('*').order('nombre'); setFolders(f || [])
     let qq = supabase.from('documents').select('*').order('nombre')
-    qq = q ? qq.ilike('nombre', `%${q}%`) : cur ? qq.eq('folder_id', cur) : qq.is('folder_id', null)
+    qq = q ? qq.ilike('nombre', `%${q}%`) : rec ? supabase.from('documents').select('*').order('created_at', { ascending: false }).limit(30) : cur ? qq.eq('folder_id', cur) : qq.is('folder_id', null)
     const { data: d } = await qq; setDocs(d || [])
-  }, [cur, q])
+    const { data: u } = await supabase.from('documents').select('tamano'); setUso((u || []).reduce((a, x) => a + (x.tamano || 0), 0))
+  }, [cur, q, rec])
   useEffect(() => { cargar() }, [cargar])
   useEffect(() => {
     window.history.replaceState({ f: null, i: 0 }, '')
-    const p = e => { setCur(e.state?.f ?? null); setIdx(e.state?.i ?? 0) }
+    const p = e => { setRec(false); setCur(e.state?.f ?? null); setIdx(e.state?.i ?? 0) }
     const c = () => { setMenu(null); setNuevo(false) }
     window.addEventListener('popstate', p); window.addEventListener('click', c)
     return () => { window.removeEventListener('popstate', p); window.removeEventListener('click', c) }
   }, [])
-  const ir = id => { const i = (window.history.state?.i ?? 0) + 1; mx.current = i; window.history.pushState({ f: id, i }, ''); setCur(id); setIdx(i) }
+  const ir = id => { const i = (window.history.state?.i ?? 0) + 1; mx.current = i; window.history.pushState({ f: id, i }, ''); setRec(false); setCur(id); setIdx(i) }
 
   const descend = id => [id, ...folders.filter(f => f.parent_id === id).flatMap(f => descend(f.id))]
   const actual = folders.find(x => x.id === cur)
   const ruta = []; for (let f = actual; f; f = folders.find(x => x.id === f.parent_id)) ruta.unshift(f)
-  const subs = q ? folders.filter(f => f.nombre.toLowerCase().includes(q.toLowerCase())) : folders.filter(f => f.parent_id === cur)
+  const subs = rec && !q ? [] : q ? folders.filter(f => f.nombre.toLowerCase().includes(q.toLowerCase())) : folders.filter(f => f.parent_id === cur)
   const lista = docs.filter(d => !ft || d.categoria === ft)
 
   const crearCarpeta = async () => {
@@ -229,9 +227,11 @@ function Drive({ perfil, q }) {
             <button onClick={() => { setNuevo(false); inp.current.click() }}>Subir archivos</button></div>}
           <input ref={inp} type="file" multiple hidden onChange={e => { preparar([...e.target.files]); e.target.value = '' }} />
         </div>
-        <button className={'nav' + (!cur && !q ? ' on' : '')} onClick={() => ir(null)} {...dnd(null)}>Unidad de Ecogis</button>
+        <button className={'nav' + (!cur && !q && !rec ? ' on' : '')} onClick={() => ir(null)} {...dnd(null)}>Unidad de Ecogis</button>
+        <button className={'nav' + (rec && !q ? ' on' : '')} onClick={() => setRec(true)}>Recientes</button>
         <div className="sub">Proyectos</div>
         {folders.filter(f => !f.parent_id).map(f => <button key={f.id} className={'nav small' + (ruta[0]?.id === f.id ? ' on' : '')} onClick={() => ir(f.id)} {...dnd(f.id)}><i style={{ background: f.color || '#374845' }} />{f.nombre}</button>)}
+        <div className="uso"><div className="barra"><i style={{ width: Math.min(100, (uso / 1073741824) * 100) + '%' }} /></div><small>{uso ? fmt(uso) : '0 KB'} usados de 1 GB</small></div>
       </aside>
       <main className={'panel' + (over ? ' over' : '')} {...dz}>
         <div className="bar">
@@ -241,7 +241,7 @@ function Drive({ perfil, q }) {
             <button disabled={!cur} onClick={() => ir(actual?.parent_id ?? null)} title="Subir un nivel">↑</button>
           </div>
           <div className="crumbs">
-            {q ? <b>Resultados para “{q}”</b> : <><button onClick={() => ir(null)} {...dnd(null)}>Unidad de Ecogis</button>
+            {rec && !q ? <b>Archivos recientes</b> : q ? <b>Resultados para “{q}”</b> : <><button onClick={() => ir(null)} {...dnd(null)}>Unidad de Ecogis</button>
               {ruta.map(f => <span key={f.id}> › <button onClick={() => ir(f.id)} {...dnd(f.id)}>{f.nombre}</button></span>)}</>}
           </div>
           <select className="ftipo" value={ft} onChange={e => setFt(e.target.value)}><option value="">Todos los tipos</option>{TIPOS.map(t => <option key={t}>{t}</option>)}</select>
@@ -286,8 +286,58 @@ function Usuarios({ perfil }) {
   )
 }
 
+function MiCuenta({ perfil, onNombre }) {
+  const [n, setN] = useState(null)
+  useEffect(() => { supabase.from('documents').select('id', { count: 'exact', head: true }).eq('uploaded_by', perfil.id).then(({ count }) => setN(count)) }, [perfil.id])
+  const cambiar = async () => {
+    const v = prompt('Tu nombre:', perfil.nombre || ''); if (!v?.trim()) return
+    await supabase.rpc('actualizar_mi_nombre', { p_nombre: v.trim() }); onNombre(v.trim())
+  }
+  return (
+    <div className="acct" onClick={e => e.stopPropagation()}>
+      <div className="big">{(perfil.nombre || perfil.email || '?')[0].toUpperCase()}</div>
+      <b>{perfil.nombre || 'Sin nombre'}</b><span className="muted">{perfil.email}</span>
+      <div className="kv"><span>Rol</span><b>{perfil.rol === 'admin' ? 'Administrador' : 'Miembro'}</b></div>
+      <div className="kv"><span>Archivos subidos</span><b>{n ?? '…'}</b></div>
+      <div className="kv"><span>Miembro desde</span><b>{fecha(perfil.created_at)}</b></div>
+      <button className="btn ghost" onClick={cambiar}>Editar mi nombre</button>
+      <button className="btn" onClick={() => supabase.auth.signOut()}>Cerrar sesión</button>
+    </div>
+  )
+}
+
+function Accesos({ perfil }) {
+  const [l, setL] = useState([])
+  const cargar = useCallback(async () => { const { data } = await supabase.from('links').select('*').order('orden'); setL(data || []) }, [])
+  useEffect(() => { cargar() }, [cargar])
+  const admin = perfil.rol === 'admin'
+  const agregar = async () => {
+    const nombre = prompt('Nombre del acceso (ej. Página de la empresa):'); if (!nombre?.trim()) return
+    let url = prompt('Dirección web (https://…):'); if (!url?.trim()) return
+    if (!/^https?:\/\//i.test(url.trim())) url = 'https://' + url.trim()
+    const grupo = prompt('Grupo (ej. Empresa, Contratación, Impuestos DIAN):', 'Empresa') || 'Otros'
+    await supabase.from('links').insert({ nombre: nombre.trim(), url: url.trim(), grupo: grupo.trim(), orden: 100 + l.length }); cargar()
+  }
+  const quitar = async x => { if (confirm(`¿Quitar "${x.nombre}"?`)) { await supabase.from('links').delete().eq('id', x.id); cargar() } }
+  const grupos = [...new Set(l.map(x => x.grupo))]
+  const pal = ['#2a2aff', '#00a6cc', '#374845', '#8e24aa', '#e37400', '#2e7d32', '#c2185b']
+  return (
+    <div className="panel solo">
+      <div className="head"><div><h2>Accesos rápidos</h2><p className="muted">Las páginas y trámites que usa Ecogis Geomatic, en un solo lugar.</p></div>
+        {admin && <button className="btn" onClick={agregar}>＋ Agregar acceso</button>}</div>
+      {grupos.map((g, k) => <div key={g}><h3 className="gt">{g}</h3>
+        <div className="links">{l.filter(x => x.grupo === g).map(x =>
+          <a key={x.id} className="lk" href={x.url} target="_blank" rel="noopener noreferrer">
+            <span className="lki" style={{ background: pal[k % pal.length] }}>{x.nombre[0]}</span>
+            <span><b>{x.nombre}</b><small>{x.descripcion}</small></span>
+            {admin && <button className="x" title="Quitar" onClick={e => { e.preventDefault(); quitar(x) }}>✕</button>}
+          </a>)}</div></div>)}
+    </div>
+  )
+}
+
 function Principal() {
-  const [sesion, setSesion] = useState(undefined), [perfil, setPerfil] = useState(null), [vista, setVista] = useState('docs'), [q, setQ] = useState('')
+  const [sesion, setSesion] = useState(undefined), [perfil, setPerfil] = useState(null), [vista, setVista] = useState('docs'), [q, setQ] = useState(''), [cuenta, setCuenta] = useState(false)
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSesion(data.session))
     const { data: s } = supabase.auth.onAuthStateChange((_e, ses) => setSesion(ses)); return () => s.subscription.unsubscribe()
@@ -296,6 +346,7 @@ function Principal() {
     if (!sesion) return setPerfil(null)
     supabase.from('profiles').select('*').eq('id', sesion.user.id).single().then(({ data }) => setPerfil(data))
   }, [sesion])
+  useEffect(() => { const c = () => setCuenta(false); window.addEventListener('click', c); return () => window.removeEventListener('click', c) }, [])
   if (sesion === undefined) return null
   if (!sesion) return <Auth />
   if (!perfil) return <p className="vacio">Cargando…</p>
@@ -304,10 +355,13 @@ function Principal() {
     <div className="app">
       <header className="top"><Logo />
         <input className="search" placeholder="Buscar en la unidad" value={q} onChange={e => { setQ(e.target.value); setVista('docs') }} />
-        {perfil.rol === 'admin' && <button className={'tab' + (vista === 'users' ? ' on' : '')} onClick={() => setVista(vista === 'users' ? 'docs' : 'users')}>Usuarios</button>}
-        <button className="av" title={'Cerrar sesión · ' + (perfil.nombre || perfil.email)} onClick={() => supabase.auth.signOut()}>{(perfil.nombre || perfil.email || '?')[0].toUpperCase()}</button>
+        <button className={'tab' + (vista === 'docs' ? ' on' : '')} onClick={() => setVista('docs')}>Archivos</button>
+        <button className={'tab' + (vista === 'links' ? ' on' : '')} onClick={() => setVista('links')}>Accesos rápidos</button>
+        {perfil.rol === 'admin' && <button className={'tab' + (vista === 'users' ? ' on' : '')} onClick={() => setVista('users')}>Usuarios</button>}
+        <div className="avw"><button className="av" title="Mi cuenta" onClick={e => { e.stopPropagation(); setCuenta(!cuenta) }}>{(perfil.nombre || perfil.email || '?')[0].toUpperCase()}</button>
+          {cuenta && <MiCuenta perfil={perfil} onNombre={n => setPerfil({ ...perfil, nombre: n })} />}</div>
       </header>
-      {vista === 'docs' ? <Drive perfil={perfil} q={q} /> : <Usuarios perfil={perfil} />}
+      {vista === 'docs' ? <Drive perfil={perfil} q={q} /> : vista === 'links' ? <Accesos perfil={perfil} /> : <Usuarios perfil={perfil} />}
     </div>
   )
 }
