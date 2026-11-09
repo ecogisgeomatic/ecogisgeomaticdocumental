@@ -68,6 +68,43 @@ const FileIcon = ({ n }) => <div className="fi" style={{ background: COL[ext(n)]
 const FolderIcon = ({ c }) => <svg width="46" height="46" viewBox="0 0 24 24" fill={c || '#374845'}><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z" /></svg>
 const Logo = ({ h = 40 }) => <div className="logo"><img src={logo} alt="Ecogis Geomatic SAS" height={h} /><span className="appn">{APP}</span></div>
 
+function Mapa({ url, ext }) {
+  const ref = useRef(), [msg, setMsg] = useState('Cargando mapa…'), [info, setInfo] = useState('')
+  useEffect(() => {
+    let mapa
+    ;(async () => {
+      try {
+        if (!document.getElementById('leaflet-css')) { const l = document.createElement('link'); l.id = 'leaflet-css'; l.rel = 'stylesheet'; l.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css'; document.head.appendChild(l) }
+        await cargarLib('https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js', 'L')
+        const L = window.L; L.Icon.Default.imagePath = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/'
+        const buf = await (await fetch(url)).arrayBuffer()
+        if (buf.byteLength > 30 * 1048576) throw new Error('El archivo pesa más de 30 MB; ábrelo en QGIS')
+        let gj
+        if (ext === 'geojson') gj = JSON.parse(new TextDecoder().decode(buf))
+        else if (ext === 'kml' || ext === 'kmz') {
+          await cargarLib('https://cdnjs.cloudflare.com/ajax/libs/togeojson/0.16.0/togeojson.min.js', 'toGeoJSON')
+          let txt
+          if (ext === 'kmz') { await cargarLib('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js', 'JSZip'); const z = await window.JSZip.loadAsync(buf); const n = Object.keys(z.files).find(k => k.toLowerCase().endsWith('.kml')); txt = await z.files[n].async('string') }
+          else txt = new TextDecoder().decode(buf)
+          gj = window.toGeoJSON.kml(new DOMParser().parseFromString(txt, 'text/xml'))
+        } else { await cargarLib('https://cdn.jsdelivr.net/npm/shpjs@4.0.4/dist/shp.min.js', 'shp'); gj = await window.shp(buf) }
+        const capas = Array.isArray(gj) ? gj : [gj]
+        mapa = L.map(ref.current); L.control.scale().addTo(mapa)
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(mapa)
+        const grupo = L.featureGroup(capas.map(c => L.geoJSON(c, { onEachFeature: (f, l) => {
+          const pr = Object.entries(f.properties || {}).filter(([, v]) => v != null && typeof v !== 'object').slice(0, 12)
+          if (pr.length) l.bindPopup(() => { const d = document.createElement('div'); pr.forEach(([k, v]) => { const r = document.createElement('div'); r.textContent = `${k}: ${v}`; d.appendChild(r) }); return d })
+        } }))).addTo(mapa)
+        if (!grupo.getBounds().isValid()) throw new Error('El archivo no tiene geometrías para mostrar')
+        mapa.fitBounds(grupo.getBounds(), { padding: [20, 20] })
+        setInfo(`${capas.reduce((a, c) => a + (c.features?.length || 0), 0)} elementos · clic en uno para ver sus atributos`); setMsg('')
+      } catch (e) { setMsg('No se pudo mostrar el mapa: ' + (e.message || e) + '. Descarga el archivo para abrirlo en QGIS.') }
+    })()
+    return () => { if (mapa) mapa.remove() }
+  }, [url, ext])
+  return <div className="mapw"><div ref={ref} className="mapa" />{msg && <div className="vacio mapmsg">{msg}</div>}{info && <div className="mapinfo">{info}</div>}</div>
+}
+
 function Preview({ d, onClose }) {
   const [u, setU] = useState(null), [html, setHtml] = useState(''), [txt, setTxt] = useState(''), [err, setErr] = useState('')
   const e = ext(d.nombre)
@@ -76,7 +113,7 @@ function Preview({ d, onClose }) {
       const url = await signed(d.path); setU(url); if (!url) return setErr('No se pudo abrir el archivo')
       try {
         if (e === 'docx') { await cargarMammoth(); const r = await window.mammoth.convertToHtml({ arrayBuffer: await (await fetch(url)).arrayBuffer() }); setHtml(r.value || '<p>Documento vacío</p>') }
-        else if (['txt', 'csv', 'json', 'md', 'kml', 'geojson'].includes(e)) setTxt((await (await fetch(url)).text()).slice(0, 200000))
+        else if (['txt', 'csv', 'json', 'md'].includes(e)) setTxt((await (await fetch(url)).text()).slice(0, 200000))
       } catch { setErr('No se pudo generar la vista previa. Descárgalo para abrirlo.') }
     })()
   }, [d])
@@ -89,8 +126,9 @@ function Preview({ d, onClose }) {
           : ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(e) ? <img src={u} alt={d.nombre} />
           : e === 'pdf' ? <iframe src={u} title={d.nombre} />
           : e === 'docx' ? <div className="word" dangerouslySetInnerHTML={{ __html: html }} />
+          : ['geojson', 'kml', 'kmz', 'zip'].includes(e) ? <Mapa url={u} ext={e} />
           : txt ? <pre className="txt">{txt}</pre>
-          : <div className="vacio"><b>Sin vista previa para .{e || 'este formato'}</b><p>{e === 'doc' ? 'Guárdalo como .docx para verlo aquí, o descárgalo.' : 'Descárgalo para abrirlo en tu equipo.'}</p></div>}
+          : <div className="vacio"><b>Sin vista previa para .{e || 'este formato'}</b><p>{e === 'doc' ? 'Guárdalo como .docx para verlo aquí, o descárgalo.' : e === 'shp' ? 'Para verlo en el mapa, sube el shapefile completo en un .zip (.shp, .dbf, .prj).' : 'Descárgalo para abrirlo en tu equipo.'}</p></div>}
       </div>
     </div></div>
   )

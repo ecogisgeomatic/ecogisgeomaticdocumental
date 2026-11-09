@@ -112,3 +112,7 @@ th{text-align:left;color:var(--mut);font-weight:normal}th,td{padding:10px 8px;bo
 .inds{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin:14px 0}
 .ind{border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:2px;border-left:6px solid var(--line);background:#f7fafb}
 .ind b{font-size:30px;color:#000}.ind.ok{border-color:#2e7d32;background:#f1faf3}.ind.mal{border-color:#d32f2f;background:#fff4f2}.ind.na{border-color:var(--mut)}
+
+.mapw{position:relative;width:100%;height:100%;min-height:420px}.mapa{width:100%;height:100%;min-height:420px}
+.mapmsg{position:absolute;inset:0;background:rgba(255,255,255,.92);display:grid;place-items:center;z-index:500}
+.mapinfo{position:absolute;left:10px;bottom:24px;background:#fff;padding:4px 10px;border-radius:8px;font-size:12px;z-index:500;box-shadow:0 1px 4px rgba(0,0,0,.3)}
