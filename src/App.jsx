@@ -65,8 +65,8 @@ const crearProyectoCompleto = async (padreId, hermanos, perfil, cliente, nombre)
 }
 const hoyStr = () => new Date().toISOString().slice(0, 10)
 const GRUPOS = [
-  { t: 'Gestión', items: [['proy', 'Proyectos'], ['tareas', 'Tareas y cronograma'], ['equipos', 'Equipos y reservas'], ['ind', 'Indicadores']] },
-  { t: 'Comercial', items: [['opor', 'Oportunidades'], ['hab', 'Documentos habilitantes']] }
+  { t: 'Gestión', items: [['proy', 'Proyectos'], ['tareas', 'Tareas y cronograma'], ['equipos', 'Equipos y reservas'], ['firmas', 'Firmas electrónicas'], ['ind', 'Indicadores']] },
+  { t: 'Comercial', items: [['opor', 'Oportunidades'], ['hab', 'Documentos habilitantes'], ['pqrs', 'PQRS (posventa)']] }
 ]
 const EST_T = { pendiente: 'Pendiente', en_curso: 'En curso', hecha: 'Hecha', bloqueada: 'Bloqueada' }
 const EST_O = { identificada: 'Identificada', evaluando: 'Evaluando', preparando: 'Preparando propuesta', presentada: 'Presentada', adjudicada: 'Adjudicada', perdida: 'Perdida', descartada: 'Descartada' }
@@ -77,6 +77,11 @@ const useUsuarios = () => { const [us, setUs] = useState([]); useEffect(() => { 
 const nom = (us, id) => { const u = us.find(x => x.id === id); return u ? (u.nombre || u.email) : '' }
 const vacioNull = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, v === '' ? null : v]))
 const plata = v => (v == null ? '—' : '$ ' + Number(v).toLocaleString('es-CO'))
+const sha256 = async buf => [...new Uint8Array(await crypto.subtle.digest('SHA-256', buf))].map(b => b.toString(16).padStart(2, '0')).join('')
+const EST_Q = { recibida: 'Recibida', en_tramite: 'En trámite', respondida: 'Respondida', cerrada: 'Cerrada' }
+const TIPO_Q = { peticion: 'Petición', queja: 'Queja', reclamo: 'Reclamo', sugerencia: 'Sugerencia' }
+const pin6 = () => String(Math.floor(100000 + Math.random() * 900000))
+const wa = t => 'https://wa.me/?text=' + encodeURIComponent(t)
 const FileIcon = ({ n }) => <div className="fi" style={{ background: COL[ext(n)] || '#546e7a' }}>{ext(n).slice(0, 4) || 'file'}</div>
 const FolderIcon = ({ c }) => <svg width="46" height="46" viewBox="0 0 24 24" fill={c || '#374845'}><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z" /></svg>
 const Logo = ({ h = 40 }) => <div className="logo"><img src={logo} alt="Ecogis Geomatic SAS" height={h} /><span className="appn">{APP}</span></div>
@@ -398,6 +403,7 @@ function FichaProyecto({ p, admin, onClose, onChange, onAbrir }) {
       </div>
       <label className="et">Descripción<input value={f.descripcion} onChange={set('descripcion')} /></label>
       {msg && <p className="msg">{msg}</p>}
+      <EncuestasProyecto p={p} />
       <Comentarios tipo="p" id={p.id} />
       <div className="dact">{p.folder_id && <button className="btn ghost" onClick={() => { onClose(); onAbrir(p.folder_id) }}>Abrir carpeta</button>}<button className="btn ghost" onClick={onClose}>Cancelar</button><button className="btn" onClick={guardar}>Guardar</button></div>
     </div></div>
@@ -809,6 +815,267 @@ function Habilitantes({ perfil }) {
   )
 }
 
+function Lienzo({ onData }) {
+  const ref = useRef(), dib = useRef(false)
+  const pos = e => { const r = ref.current.getBoundingClientRect(); return [(e.clientX - r.left) * (ref.current.width / r.width), (e.clientY - r.top) * (ref.current.height / r.height)] }
+  const ini = e => { dib.current = true; const c = ref.current.getContext('2d'); c.lineWidth = 2.5; c.lineCap = 'round'; c.strokeStyle = '#000'; c.beginPath(); c.moveTo(...pos(e)); ref.current.setPointerCapture(e.pointerId) }
+  const mov = e => { if (dib.current) { const c = ref.current.getContext('2d'); c.lineTo(...pos(e)); c.stroke() } }
+  const fin = () => { if (dib.current) { dib.current = false; onData(ref.current.toDataURL('image/png')) } }
+  return <div><canvas ref={ref} width={600} height={200} className="lienzo" onPointerDown={ini} onPointerMove={mov} onPointerUp={fin} onPointerLeave={fin} />
+    <button className="chip no" onClick={() => { ref.current.getContext('2d').clearRect(0, 0, 600, 200); onData('') }}>Borrar y repetir</button></div>
+}
+
+function PanelFirma({ path, hashEsperado, nombre0, externo, onFirmar, onRechazar }) {
+  const [url, setUrl] = useState(null), [hash, setHash] = useState(''), [integro, setIntegro] = useState(null)
+  const [f, setF] = useState({ nombre: nombre0 || '', cedula: '', ok: false }), [firma, setFirma] = useState(''), [msg, setMsg] = useState(''), [env, setEnv] = useState(false)
+  useEffect(() => { (async () => { const u = await signed(path); setUrl(u); try { const h = await sha256(await (await fetch(u)).arrayBuffer()); setHash(h); setIntegro(h === hashEsperado) } catch { setIntegro(false) } })() }, [path, hashEsperado])
+  const ir = async () => {
+    if (externo && (!f.nombre.trim() || !f.cedula.trim())) return setMsg('Escribe tu nombre completo y tu documento de identidad.')
+    if (!firma) return setMsg('Dibuja tu firma en el recuadro.'); if (!f.ok) return setMsg('Debes aceptar la declaración para firmar.')
+    setEnv(true); setMsg(''); const err = await onFirmar({ nombre: f.nombre.trim(), cedula: f.cedula.trim(), firma, hash }); if (err) { setMsg(err); setEnv(false) }
+  }
+  return (
+    <div>
+      {url ? <><iframe src={url} title="Documento a firmar" className="pdfv" /><p><a href={url} target="_blank" rel="noopener noreferrer">Abrir el documento en otra pestaña</a></p></> : <div className="vacio">Cargando documento…</div>}
+      {integro === false && <p className="msg">No se pudo verificar la integridad del documento (cambió o no se pudo leer). No es posible firmar. Pide una nueva solicitud.</p>}
+      {integro && <>
+        <p className="msg ok">✔ Documento verificado. Huella SHA-256: <small>{hash}</small></p>
+        {externo && <div className="frm"><label>Nombre completo<input value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} /></label><label>Documento de identidad<input value={f.cedula} onChange={e => setF({ ...f, cedula: e.target.value })} /></label></div>}
+        <b>Tu firma</b><Lienzo onData={setFirma} />
+        <label className="chk"><input type="checkbox" checked={f.ok} onChange={e => setF({ ...f, ok: e.target.checked })} /> Declaro que leí el documento, que lo que firmo corresponde a su contenido y que manifiesto mi voluntad de firmarlo por medios electrónicos. Autorizo el registro de mi firma, fecha, hora y dirección IP como constancia.</label>
+        {msg && <p className="msg">{msg}</p>}
+        <div className="dact">{onRechazar && <button className="chip no" onClick={onRechazar}>No firmar</button>}<button className="btn" disabled={env} onClick={ir}>{env ? 'Firmando…' : 'Firmar documento'}</button></div></>}
+    </div>
+  )
+}
+
+function PubLayout({ children }) { return <div className="app"><header className="top"><Logo /></header><div className="panel pub narrow">{children}</div></div> }
+
+function FirmaPublica({ token }) {
+  const [paso, setPaso] = useState('pin'), [pin, setPin] = useState(''), [d, setD] = useState(null), [msg, setMsg] = useState('')
+  const abrir = async () => {
+    setMsg(''); const { data, error } = await supabase.rpc('abrir_firma', { p_token: token, p_pin: pin.trim() })
+    if (error) return setMsg(error.message); if (data?.error) return setMsg(data.error)
+    setD(data); setPaso(data.estado_firmante === 'pendiente' ? 'firmar' : 'listo')
+  }
+  const firmar = async x => { const { data, error } = await supabase.rpc('firmar_externo', { p_token: token, p_pin: pin.trim(), p_nombre: x.nombre, p_cedula: x.cedula, p_firma: x.firma, p_hash: x.hash, p_ua: navigator.userAgent }); const e = error?.message || data?.error; if (e) return e; setD({ ...d, estado_firmante: 'firmado' }); setPaso('listo') }
+  const rechazar = async () => { const m = prompt('¿Por qué no firmas? (obligatorio)'); if (!m?.trim()) return; const { data, error } = await supabase.rpc('rechazar_firma', { p_token: token, p_pin: pin.trim(), p_motivo: m.trim() }); if (error || data?.error) return setMsg(error?.message || data.error); setD({ ...d, estado_firmante: 'rechazado' }); setPaso('listo') }
+  return (
+    <PubLayout>
+      {paso === 'pin' && <><h2>Firma electrónica</h2><p className="muted">Ecogis Geomatic S.A.S. te envió un documento para firmar. Escribe el PIN de 6 números que te dieron por otro medio (llamada o mensaje).</p>
+        <div className="lnk"><input inputMode="numeric" maxLength={6} placeholder="PIN de 6 números" value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ''))} /><button className="btn" onClick={abrir}>Continuar</button></div>{msg && <p className="msg">{msg}</p>}</>}
+      {paso === 'firmar' && <><h2>{d.titulo}</h2>{d.mensaje && <p className="muted">{d.mensaje}</p>}<p className="muted">Archivo: {d.nombre_doc}</p>
+        <PanelFirma path={d.path} hashEsperado={d.hash_documento} nombre0={d.firmante_nombre} externo onFirmar={firmar} onRechazar={rechazar} /></>}
+      {paso === 'listo' && <div className="vacio"><b>{d.estado_firmante === 'firmado' ? '✔ Documento firmado' : d.estado_firmante === 'rechazado' ? 'Respondiste que no firmas' : ''}</b><p>Gracias. Ecogis Geomatic S.A.S. recibió tu respuesta.</p></div>}
+    </PubLayout>
+  )
+}
+
+function EncuestaPublica({ token }) {
+  const [d, setD] = useState(undefined), [r, setR] = useState({ p1: 0, p2: 0, p3: 0, p4: 0 }), [com, setCom] = useState(''), [ok, setOk] = useState(false), [msg, setMsg] = useState('')
+  useEffect(() => { supabase.rpc('get_encuesta', { p_token: token }).then(({ data }) => setD(data)) }, [token])
+  const PREG = [['p1', 'Cumplimiento de los plazos acordados'], ['p2', 'Calidad técnica de los productos entregados'], ['p3', 'Atención y comunicación del equipo'], ['p4', '¿Nos recomendaría a otras entidades o empresas?']]
+  const enviar = async () => {
+    if (Object.values(r).some(v => !v)) return setMsg('Por favor califica las cuatro preguntas.')
+    const { error } = await supabase.rpc('responder_encuesta', { p_token: token, p1: r.p1, p2: r.p2, p3: r.p3, p4: r.p4, p_comentario: com.trim() || null }); if (error) return setMsg(error.message); setOk(true)
+  }
+  if (d === undefined) return <PubLayout><p className="vacio">Cargando…</p></PubLayout>
+  if (!d) return <PubLayout><div className="vacio"><b>Enlace no válido</b><p>Pide uno nuevo a Ecogis Geomatic.</p></div></PubLayout>
+  if (d.respondida || ok) return <PubLayout><div className="vacio"><b>¡Gracias por tu opinión!</b><p>Nos ayuda a mejorar cada proyecto.</p></div></PubLayout>
+  return (
+    <PubLayout><h2>Encuesta de satisfacción</h2><p className="muted">Proyecto: <b>{d.proyecto}</b>{d.cliente ? ` · ${d.cliente}` : ''}. Califica de 1 (muy mal) a 5 (excelente). Toma menos de un minuto.</p>
+      {PREG.map(([k, t]) => <div key={k} className="preg"><span>{t}</span><div>{[1, 2, 3, 4, 5].map(n => <button key={n} className={'est5' + (r[k] >= n ? ' on' : '')} aria-label={n + ' de 5'} onClick={() => setR({ ...r, [k]: n })}>★</button>)}</div></div>)}
+      <label className="et">Comentarios (opcional)<input value={com} onChange={e => setCom(e.target.value)} /></label>
+      {msg && <p className="msg">{msg}</p>}<button className="btn" onClick={enviar}>Enviar</button></PubLayout>
+  )
+}
+
+function PqrsPublica() {
+  const [f, setF] = useState({ tipo: 'peticion', nombre: '', documento: '', email: '', telefono: '', asunto: '', mensaje: '', acepta: false, hp: '' })
+  const [res, setRes] = useState(null), [msg, setMsg] = useState(''), [cr, setCr] = useState(''), [ce, setCe] = useState(''), [est, setEst] = useState(null)
+  const set = k => e => setF({ ...f, [k]: e.target.value })
+  const enviar = async e => {
+    e.preventDefault(); setMsg('')
+    const { data, error } = await supabase.rpc('radicar_pqrs', { p_tipo: f.tipo, p_nombre: f.nombre, p_documento: f.documento || null, p_email: f.email, p_telefono: f.telefono || null, p_asunto: f.asunto, p_mensaje: f.mensaje, p_acepta: f.acepta, p_hp: f.hp })
+    if (error) return setMsg(error.message); setRes(data)
+  }
+  const consultar = async () => { const { data, error } = await supabase.rpc('consultar_pqrs', { p_radicado: cr, p_email: ce }); setEst(error ? { error: error.message } : data || { error: 'No encontramos una solicitud con esos datos.' }) }
+  return (
+    <PubLayout>
+      {res ? <div className="vacio"><b>✔ Solicitud recibida</b><p>Tu número de radicado es <b>{res.radicado}</b>. Guárdalo para consultar el estado.</p><p>Fecha límite de respuesta: {fecha(res.fecha_limite)}</p></div> : <>
+        <h2>Peticiones, quejas, reclamos y sugerencias</h2><p className="muted">Ecogis Geomatic S.A.S. te responderá al correo que escribas.</p>
+        <form onSubmit={enviar} className="auth-box" style={{ boxShadow: 'none', padding: 0, width: '100%' }}>
+          <label className="et">Tipo<select value={f.tipo} onChange={set('tipo')}>{Object.entries(TIPO_Q).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+          <input placeholder="Nombre completo" required value={f.nombre} onChange={set('nombre')} /><input placeholder="Documento de identidad (opcional)" value={f.documento} onChange={set('documento')} />
+          <input type="email" placeholder="Correo electrónico" required value={f.email} onChange={set('email')} /><input placeholder="Teléfono (opcional)" value={f.telefono} onChange={set('telefono')} />
+          <input placeholder="Asunto" required value={f.asunto} onChange={set('asunto')} /><textarea rows={5} placeholder="Cuéntanos con detalle" required value={f.mensaje} onChange={set('mensaje')} style={{ font: 'inherit', padding: 10, border: '1px solid var(--line)', borderRadius: 8 }} />
+          <input className="hp" tabIndex={-1} autoComplete="off" aria-hidden="true" value={f.hp} onChange={set('hp')} />
+          <label className="chk"><input type="checkbox" checked={f.acepta} onChange={e => setF({ ...f, acepta: e.target.checked })} /> Autorizo a Ecogis Geomatic S.A.S. a tratar mis datos personales para gestionar esta solicitud, conforme a la Ley 1581 de 2012.</label>
+          {msg && <p className="msg">{msg}</p>}<button className="btn">Enviar solicitud</button></form>
+        <h3 className="gt">¿Ya radicaste una solicitud?</h3>
+        <div className="lnk"><input placeholder="Radicado (ej. PQRS-2026-0001)" value={cr} onChange={e => setCr(e.target.value)} /><input type="email" placeholder="Tu correo" value={ce} onChange={e => setCe(e.target.value)} /><button className="btn ghost" onClick={consultar}>Consultar</button></div>
+        {est && (est.error ? <p className="msg">{est.error}</p> : <div className="com"><b>{est.radicado}</b> · {TIPO_Q[est.tipo]} · {EST_Q[est.estado]}<small>Fecha límite: {fecha(est.fecha_limite)}</small>{est.respuesta && <p><b>Respuesta:</b> {est.respuesta}</p>}</div>)}</>}
+    </PubLayout>
+  )
+}
+
+function EncuestasProyecto({ p }) {
+  const [l, setL] = useState([]), [ok, setOk] = useState('')
+  const cargar = useCallback(async () => { const { data } = await supabase.from('encuestas').select('*').eq('proyecto_id', p.id).order('created_at', { ascending: false }); setL(data || []) }, [p.id])
+  useEffect(() => { cargar() }, [cargar])
+  const link = e => `${window.location.origin}/?encuesta=${e.token}`
+  const msg = e => `Hola, para Ecogis Geomatic S.A.S. su opinión sobre el proyecto "${p.nombre}" es muy importante. Responder toma 1 minuto: ${link(e)}`
+  return (
+    <div className="coms"><b>Encuesta de satisfacción</b> <button className="btn ghost" onClick={async () => { await supabase.from('encuestas').insert({ proyecto_id: p.id, created_by: ACTOR.id }); registrar('Creó encuesta', p.nombre); cargar() }}>＋ Crear enlace</button>
+      {l.map(e => <div key={e.id} className="lnk"><input readOnly value={link(e)} onFocus={x => x.target.select()} />
+        {e.respondida_at ? <span className="sem verde">Respondida · {Math.round(((e.p1 + e.p2 + e.p3 + e.p4) / 4) * 20)} %</span> : <>
+          <button className="btn" onClick={async () => { await navigator.clipboard.writeText(link(e)); setOk(e.id) }}>{ok === e.id ? '¡Copiado!' : 'Copiar'}</button>
+          <a className="btn ghost" target="_blank" rel="noopener noreferrer" href={wa(msg(e))}>WhatsApp</a>
+          <a className="btn ghost" href={'mailto:?subject=' + encodeURIComponent('Encuesta de satisfacción · Ecogis Geomatic') + '&body=' + encodeURIComponent(msg(e))}>Correo</a></>}
+        {e.comentario && <small>“{e.comentario}”</small>}</div>)}
+    </div>
+  )
+}
+
+function Pqrs({ perfil }) {
+  const [l, setL] = useState([]), [sel, setSel] = useState(null), [fe, setFe] = useState(''), [ok, setOk] = useState(false)
+  const cargar = useCallback(async () => { const { data } = await supabase.from('pqrs').select('*').order('created_at', { ascending: false }); setL(data || []) }, [])
+  useEffect(() => { cargar() }, [cargar])
+  if (perfil.rol !== 'admin') return <div className="panel solo"><div className="vacio">Solo los administradores gestionan las PQRS porque contienen datos personales.</div></div>
+  const pub = `${window.location.origin}/?pqrs=1`, v = l.filter(x => !fe || x.estado === fe)
+  const guardar = async () => {
+    const d = { estado: sel.estado, respuesta: sel.respuesta || null }; if (sel.estado === 'respondida' && !sel.respondida_at) d.respondida_at = new Date().toISOString()
+    const { error } = await supabase.from('pqrs').update(d).eq('id', sel.id); if (error) return alert(error.message)
+    registrar('Gestionó PQRS', `${sel.radicado} → ${EST_Q[sel.estado]}`); setSel(null); cargar()
+  }
+  return (
+    <div className="panel solo"><div className="head"><div><h2>PQRS</h2><p className="muted">Peticiones, quejas, reclamos y sugerencias de clientes. Enlace público del formulario:</p></div>
+      <select value={fe} onChange={e => setFe(e.target.value)}><option value="">Todas</option>{Object.entries(EST_Q).map(([k, x]) => <option key={k} value={k}>{x}</option>)}</select></div>
+      <div className="lnk"><input readOnly value={pub} onFocus={e => e.target.select()} /><button className="btn" onClick={async () => { await navigator.clipboard.writeText(pub); setOk(true) }}>{ok ? '¡Copiado!' : 'Copiar enlace'}</button></div>
+      {!v.length ? <div className="vacio">No hay solicitudes</div> : <div className="tabla-w"><table><thead><tr><th>Radicado</th><th>Tipo</th><th>Solicitante</th><th>Asunto</th><th>Estado</th><th>Plazo</th></tr></thead>
+        <tbody>{v.map(x => { const [c, t] = ['respondida', 'cerrada'].includes(x.estado) ? ['verde', '—'] : semaforo(x.fecha_limite); return <tr key={x.id} className="clic" onClick={() => setSel(x)}><td>{x.radicado}</td><td>{TIPO_Q[x.tipo]}</td><td>{x.nombre}</td><td>{x.asunto}</td><td>{EST_Q[x.estado]}</td><td><span className={'sem ' + c}>{t}</span></td></tr> })}</tbody></table></div>}
+      {sel && <div className="modal" onClick={() => setSel(null)}><div className="dlg" onClick={e => e.stopPropagation()}>
+        <h3>{sel.radicado} · {TIPO_Q[sel.tipo]}</h3><p><b>{sel.nombre}</b> · {sel.email}{sel.telefono ? ' · ' + sel.telefono : ''}{sel.documento ? ' · Doc. ' + sel.documento : ''}</p>
+        <p><b>{sel.asunto}</b></p><p className="com">{sel.mensaje}</p><small>Recibida {new Date(sel.created_at).toLocaleString('es-CO')} · plazo {fecha(sel.fecha_limite)}</small>
+        <div className="frm"><label>Estado<select value={sel.estado} onChange={e => setSel({ ...sel, estado: e.target.value })}>{Object.entries(EST_Q).map(([k, x]) => <option key={k} value={k}>{x}</option>)}</select></label></div>
+        <label className="et">Respuesta<textarea rows={4} value={sel.respuesta || ''} onChange={e => setSel({ ...sel, respuesta: e.target.value })} style={{ font: 'inherit', padding: 10, border: '1px solid var(--line)', borderRadius: 8 }} /></label>
+        <div className="dact"><a className="btn ghost" href={`mailto:${sel.email}?subject=${encodeURIComponent('Respuesta a su solicitud ' + sel.radicado)}&body=${encodeURIComponent(sel.respuesta || '')}`}>Responder por correo</a><button className="btn ghost" onClick={() => setSel(null)}>Cancelar</button><button className="btn" onClick={guardar}>Guardar</button></div></div></div>}
+    </div>
+  )
+}
+
+function EnlacesFirma({ titulo, items, onClose }) {
+  const [it, setIt] = useState(items), [ok, setOk] = useState('')
+  const link = x => `${window.location.origin}/?firma=${x.token}`
+  const msg = x => `Hola ${x.nombre}, Ecogis Geomatic S.A.S. te envía "${titulo}" para firma electrónica: ${link(x)}\nEl PIN de acceso te lo daré por otro medio.`
+  const nuevo = async x => { const pin = pin6(); const { data, error } = await supabase.rpc('regenerar_firmante', { p_fid: x.id, p_pin: pin }); if (error) return alert(error.message); setIt(it.map(y => (y.id === x.id ? { ...y, token: data, pin } : y))) }
+  return (
+    <div className="modal" onClick={onClose}><div className="dlg" onClick={e => e.stopPropagation()}>
+      <h3>Enlaces de firma</h3><p className="muted">Envía el <b>enlace</b> por un medio (WhatsApp o correo) y dile el <b>PIN</b> por otro (llamada o mensaje aparte). Así solo quien tiene ambos puede firmar. El PIN no se puede volver a ver: si se pierde, genera uno nuevo.</p>
+      {it.length === 0 && <p className="vacio">No hay firmantes externos pendientes</p>}
+      {it.map(x => <div key={x.id} className="com"><b>{x.nombre}</b>{x.pin && <div className="pinbig">PIN: {x.pin}</div>}
+        <div className="lnk"><input readOnly value={link(x)} onFocus={e => e.target.select()} /><button className="btn" onClick={async () => { await navigator.clipboard.writeText(link(x)); setOk(x.id) }}>{ok === x.id ? '¡Copiado!' : 'Copiar'}</button>
+          <a className="btn ghost" target="_blank" rel="noopener noreferrer" href={wa(msg(x))}>WhatsApp</a><a className="btn ghost" href={'mailto:?subject=' + encodeURIComponent('Firma de documento · Ecogis Geomatic') + '&body=' + encodeURIComponent(msg(x))}>Correo</a><button className="chip no" onClick={() => nuevo(x)}>Nuevo PIN y enlace</button></div></div>)}
+      <div className="dact"><button className="btn" onClick={onClose}>Listo</button></div>
+    </div></div>
+  )
+}
+
+function NuevaFirma({ onClose, onCreada }) {
+  const us = useUsuarios()
+  const [doc, setDoc] = useState(null), [q, setQ] = useState(''), [res, setRes] = useState([]), [titulo, setTitulo] = useState(''), [mensaje, setMensaje] = useState('')
+  const [fs, setFs] = useState([]), [ext, setExt] = useState({ nombre: '', email: '', cedula: '' }), [uid, setUid] = useState(''), [msg, setMsg] = useState(''), [env, setEnv] = useState(false)
+  const buscar = async v => { setQ(v); if (v.trim().length < 2) return setRes([]); const { data } = await supabase.from('documents').select('id,nombre,path').is('deleted_at', null).ilike('nombre', `%${v.trim().replace(/[%,]/g, '')}%.pdf`).limit(8); setRes(data || []) }
+  const addInt = () => { const u = us.find(x => x.id === uid); if (!u || fs.some(f => f.user_id === uid)) return; setFs([...fs, { tipo: 'interno', user_id: uid, nombre: u.nombre || u.email }]); setUid('') }
+  const addExt = () => { if (!ext.nombre.trim()) return setMsg('Escribe el nombre de la persona externa.'); setMsg(''); setFs([...fs, { tipo: 'externo', nombre: ext.nombre.trim(), email: ext.email.trim(), cedula: ext.cedula.trim(), pin: pin6() }]); setExt({ nombre: '', email: '', cedula: '' }) }
+  const crear = async () => {
+    if (!doc) return setMsg('Elige el PDF a firmar.'); if (!fs.length) return setMsg('Agrega al menos un firmante.')
+    setEnv(true); setMsg('')
+    try {
+      const hash = await sha256(await (await fetch(await signed(doc.path))).arrayBuffer())
+      const { data, error } = await supabase.rpc('crear_solicitud_firma', { p_document: doc.id, p_titulo: titulo.trim() || doc.nombre, p_mensaje: mensaje.trim() || null, p_hash: hash, p_firmantes: fs })
+      if (error) throw error
+      registrar('Solicitó firmas', titulo.trim() || doc.nombre)
+      const ext2 = data.firmantes.filter(x => x.tipo === 'externo').map(x => ({ ...x, pin: fs.find(f => f.tipo === 'externo' && f.nombre === x.nombre)?.pin }))
+      onCreada(titulo.trim() || doc.nombre, ext2)
+    } catch (e) { setMsg(e.message || 'No se pudo crear la solicitud'); setEnv(false) }
+  }
+  return (
+    <div className="modal" onClick={onClose}><div className="dlg" onClick={e => e.stopPropagation()}>
+      <h3>Nueva solicitud de firma</h3>
+      <label className="et">Documento (solo PDF): {doc ? <b>{doc.nombre} <button className="x2" onClick={() => setDoc(null)}>✕</button></b> : 'ninguno'}<input placeholder="Busca el PDF por nombre…" value={q} onChange={e => buscar(e.target.value)} /></label>
+      {res.map(r => <button key={r.id} className="nav small" onClick={() => { setDoc(r); setTitulo(r.nombre.replace(/\.pdf$/i, '')); setRes([]); setQ('') }}>{r.nombre}</button>)}
+      <div className="frm"><label>Título<input value={titulo} onChange={e => setTitulo(e.target.value)} /></label><label>Mensaje para los firmantes<input value={mensaje} onChange={e => setMensaje(e.target.value)} /></label></div>
+      <b>Firmantes</b>{fs.map((f, i) => <div key={i} className="apr">{f.tipo === 'interno' ? '👤 Ecogis' : '🌐 Externo'} · {f.nombre} <button className="x2" onClick={() => setFs(fs.filter((_, j) => j !== i))}>✕</button></div>)}
+      <div className="lnk"><select value={uid} onChange={e => setUid(e.target.value)}><option value="">Persona de Ecogis…</option>{us.map(u => <option key={u.id} value={u.id}>{u.nombre || u.email}</option>)}</select><button className="btn ghost" onClick={addInt}>Agregar</button></div>
+      <div className="lnk"><input placeholder="Externo: nombre" value={ext.nombre} onChange={e => setExt({ ...ext, nombre: e.target.value })} /><input placeholder="correo (opcional)" value={ext.email} onChange={e => setExt({ ...ext, email: e.target.value })} /><button className="btn ghost" onClick={addExt}>Agregar externo</button></div>
+      {msg && <p className="msg">{msg}</p>}
+      <div className="dact"><button className="btn ghost" onClick={onClose}>Cancelar</button><button className="btn" disabled={env} onClick={crear}>{env ? 'Creando…' : 'Crear solicitud'}</button></div>
+    </div></div>
+  )
+}
+
+function Firmas({ perfil }) {
+  const [ss, setSs] = useState([]), [fm, setFm] = useState([]), [docs, setDocs] = useState({}), [nuevo, setNuevo] = useState(false), [firmando, setFirmando] = useState(null), [enl, setEnl] = useState(null), [prev, setPrev] = useState(null), [msg, setMsg] = useState('')
+  const cargar = useCallback(async () => {
+    const { data: s } = await supabase.from('firmas_solicitudes').select('*').order('created_at', { ascending: false }); setSs(s || [])
+    const { data: f } = await supabase.from('firmas_firmantes').select('id,solicitud_id,tipo,user_id,nombre,email,cedula,estado,firmado_at,ip,firma_png,hash_firmado,motivo'); setFm(f || [])
+    const ids = [...new Set((s || []).flatMap(x => [x.document_id, x.doc_firmado_id]).filter(Boolean))]
+    if (ids.length) { const { data: d } = await supabase.from('documents').select('*').in('id', ids); setDocs(Object.fromEntries((d || []).map(x => [x.id, x]))) }
+  }, [])
+  useEffect(() => { cargar() }, [cargar])
+  const mias = fm.filter(f => f.user_id === perfil.id && f.estado === 'pendiente' && ss.find(x => x.id === f.solicitud_id)?.estado === 'abierta')
+  const verEnlaces = async s => { const { data, error } = await supabase.rpc('ver_enlaces_firma', { p_sid: s.id }); if (error) return setMsg(error.message); setEnl({ titulo: s.titulo, items: (data || []).filter(x => x.estado === 'pendiente') }) }
+  const cancelar = async s => { if (!confirm('¿Cancelar esta solicitud? Los enlaces dejarán de funcionar.')) return; await supabase.from('firmas_solicitudes').update({ estado: 'cancelada' }).eq('id', s.id); registrar('Canceló solicitud de firma', s.titulo); cargar() }
+  const generar = async s => {
+    setMsg('Generando PDF firmado…')
+    try {
+      await cargarLib('https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js', 'PDFLib')
+      const { PDFDocument, StandardFonts, rgb } = window.PDFLib, d = docs[s.document_id]
+      const bytes = await (await fetch(await signed(d.path))).arrayBuffer()
+      if ((await sha256(bytes)) !== s.hash_documento) return setMsg('El archivo original cambió; no se puede generar el PDF firmado.')
+      const pdf = await PDFDocument.load(bytes), font = await pdf.embedFont(StandardFonts.Helvetica), bold = await pdf.embedFont(StandardFonts.HelveticaBold)
+      const wa1 = x => String(x ?? '').replace(/[^\x20-\x7E\xA0-\xFF]/g, '?')
+      let page = pdf.addPage([595, 842]), y = 800
+      const t = (txt, o = {}) => { if (y < 70) { page = pdf.addPage([595, 842]); y = 800 } page.drawText(wa1(txt), { x: 50, y, size: o.size || 10, font: o.bold ? bold : font, color: rgb(0.2, 0.28, 0.27), maxWidth: 495 }); y -= o.dy || 15 }
+      t('CERTIFICADO DE FIRMAS ELECTRONICAS', { size: 16, bold: true, dy: 26 }); t('Ecogis Geomatic S.A.S. - Geoteca Ecogis', { dy: 20 })
+      t('Documento: ' + d.nombre, { bold: true }); t('Titulo: ' + s.titulo); t('Huella SHA-256 del documento original:'); t(s.hash_documento, { size: 8, dy: 22 })
+      for (const f of fm.filter(x => x.solicitud_id === s.id)) {
+        if (y < 190) { page = pdf.addPage([595, 842]); y = 800 }
+        t(`${f.nombre} (${f.tipo === 'interno' ? 'Ecogis, cuenta verificada' : 'externo, enlace + PIN'})`, { bold: true }); if (f.cedula) t('Documento de identidad: ' + f.cedula); if (f.email) t('Correo: ' + f.email)
+        t(`Estado: ${f.estado === 'firmado' ? 'FIRMADO' : f.estado.toUpperCase()} - ${f.firmado_at ? new Date(f.firmado_at).toLocaleString('es-CO') : ''}`); t('IP: ' + (f.ip || 'no disponible'), { dy: 8 })
+        if (f.firma_png) { const img = await pdf.embedPng(f.firma_png); const w = 150, h = (img.height / img.width) * w; y -= h; page.drawImage(img, { x: 50, y, width: w, height: h }); y -= 6 }
+        y -= 14
+      }
+      t('Este certificado deja constancia de la voluntad de firmar por medios electronicos. No equivale a una firma digital emitida por una entidad de certificacion.', { size: 8 })
+      const out = await pdf.save(), base = d.nombre.replace(/\.pdf$/i, ''), path = `${d.folder_id || 'raiz'}/${Date.now()}-${(base + '_firmado').replace(/[^\w.\-]/g, '_')}.pdf`
+      const up = await supabase.storage.from('documentos').upload(path, new Blob([out], { type: 'application/pdf' })); if (up.error) throw up.error
+      const { data: nd, error } = await supabase.from('documents').insert({ folder_id: d.folder_id, nombre: base + '_firmado.pdf', path, tamano: out.length, tipo: 'application/pdf', categoria: d.categoria, estado: 'vigente', uploaded_by: perfil.id, uploaded_by_nombre: perfil.nombre || perfil.email }).select().single(); if (error) throw error
+      await supabase.from('firmas_solicitudes').update({ doc_firmado_id: nd.id }).eq('id', s.id); registrar('Generó PDF firmado', base); setMsg(''); cargar()
+    } catch (e) { setMsg('No se pudo generar el PDF firmado: ' + (e.message || e)) }
+  }
+  const chip = e => <span className={'est ' + (e === 'firmado' || e === 'completa' ? '' : e === 'pendiente' || e === 'abierta' ? 'revision' : 'borrador')}>{e === 'firmado' ? 'Firmado' : e === 'completa' ? 'Completa' : e === 'abierta' ? 'Abierta' : e === 'pendiente' ? 'Pendiente' : e === 'rechazado' ? 'Rechazó' : 'Cancelada'}</span>
+  return (
+    <div className="panel solo">
+      <div className="head"><div><h2>Firmas electrónicas</h2><p className="muted">Firma documentos PDF y pídele firma a clientes y empleados.</p></div><button className="btn" onClick={() => setNuevo(true)}>＋ Solicitar firmas</button></div>
+      {msg && <p className="msg ok">{msg}</p>}
+      <h3 className="gt">Pendientes por firmar ({mias.length})</h3>
+      {!mias.length ? <div className="vacio">No tienes documentos por firmar</div> : mias.map(f => { const s = ss.find(x => x.id === f.solicitud_id); return <div key={f.id} className="lnk"><span><b>{s?.titulo}</b></span><button className="btn" onClick={() => setFirmando({ f, s })}>Revisar y firmar</button></div> })}
+      <h3 className="gt">Solicitudes</h3>
+      {!ss.length ? <div className="vacio">Aún no hay solicitudes de firma</div> : ss.map(s => <div key={s.id} className="com"><b>{s.titulo}</b> {chip(s.estado)} <small>{docs[s.document_id]?.nombre} · {fecha(s.created_at)}</small>
+        {fm.filter(f => f.solicitud_id === s.id).map(f => <div key={f.id} className="apr">{f.tipo === 'interno' ? '👤' : '🌐'} {f.nombre} — {chip(f.estado)}{f.firmado_at && ` · ${new Date(f.firmado_at).toLocaleString('es-CO')}`}{f.motivo && <small>Motivo: {f.motivo}</small>}</div>)}
+        <div className="lnk">{s.estado === 'abierta' && (s.creada_por === perfil.id || perfil.rol === 'admin') && <><button className="btn ghost" onClick={() => verEnlaces(s)}>Enlaces para externos</button><button className="chip no" onClick={() => cancelar(s)}>Cancelar</button></>}
+          {s.estado === 'completa' && !s.doc_firmado_id && (s.creada_por === perfil.id || perfil.rol === 'admin') && <button className="btn" onClick={() => generar(s)}>Generar PDF firmado</button>}
+          {s.doc_firmado_id && docs[s.doc_firmado_id] && <button className="btn ghost" onClick={() => setPrev(docs[s.doc_firmado_id])}>Ver PDF firmado</button>}</div></div>)}
+      {nuevo && <NuevaFirma onClose={() => setNuevo(false)} onCreada={(titulo, items) => { setNuevo(false); cargar(); if (items.length) setEnl({ titulo, items }) }} />}
+      {enl && <EnlacesFirma titulo={enl.titulo} items={enl.items} onClose={() => setEnl(null)} />}
+      {prev && <Preview d={prev} onClose={() => setPrev(null)} />}
+      {firmando && <div className="modal" onClick={() => setFirmando(null)}><div className="pv" onClick={e => e.stopPropagation()}><div className="pvh"><b>{firmando.s?.titulo}</b><button className="btn ghost" onClick={() => setFirmando(null)}>Cerrar</button></div>
+        <div className="pvb" style={{ display: 'block', overflow: 'auto', padding: 16 }}><PanelFirma path={docs[firmando.s.document_id]?.path} hashEsperado={firmando.s.hash_documento} onFirmar={async x => { const { error } = await supabase.rpc('firmar_interno', { p_firmante: firmando.f.id, p_firma: x.firma, p_hash: x.hash, p_ua: navigator.userAgent }); if (error) return error.message; registrar('Firmó electrónicamente', firmando.s.titulo); setFirmando(null); cargar() }} /></div></div></div>}
+    </div>
+  )
+}
+
 function Drive({ perfil, q, inicio, irVista }) {
   const [folders, setFolders] = useState([]), [docs, setDocs] = useState([]), [cur, setCur] = useState(null), [idx, setIdx] = useState(0)
   const [vista, setVista] = useState('grid'), [ft, setFt] = useState(''), [menu, setMenu] = useState(null), [nuevo, setNuevo] = useState(false)
@@ -1088,7 +1355,7 @@ function Accesos({ perfil }) {
 }
 
 function Principal() {
-  const [sesion, setSesion] = useState(undefined), [perfil, setPerfil] = useState(null), [vista, setVista] = useState('docs'), [q, setQ] = useState(''), [cuenta, setCuenta] = useState(false), [recuperar, setRecuperar] = useState(false), [mas, setMas] = useState(false), [inicio, setInicio] = useState(null), [pend, setPend] = useState(0)
+  const [sesion, setSesion] = useState(undefined), [perfil, setPerfil] = useState(null), [vista, setVista] = useState('docs'), [q, setQ] = useState(''), [cuenta, setCuenta] = useState(false), [recuperar, setRecuperar] = useState(false), [mas, setMas] = useState(false), [inicio, setInicio] = useState(null), [pend, setPend] = useState(0), [pendF, setPendF] = useState(0)
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSesion(data.session))
     const { data: s } = supabase.auth.onAuthStateChange((ev, ses) => { if (ev === 'PASSWORD_RECOVERY') setRecuperar(true); setSesion(ses) }); return () => s.subscription.unsubscribe()
@@ -1100,7 +1367,7 @@ function Principal() {
   useEffect(() => { const c = () => { setCuenta(false); setMas(false) }; window.addEventListener('click', c); return () => window.removeEventListener('click', c) }, [])
   useEffect(() => { ACTOR = perfil }, [perfil])
   const abrir = id => { setInicio({ id }); setVista('docs') }
-  useEffect(() => { if (perfil?.activo) supabase.from('aprobaciones').select('id', { count: 'exact', head: true }).eq('user_id', perfil.id).eq('estado', 'pendiente').then(({ count }) => setPend(count || 0)) }, [perfil, vista])
+  useEffect(() => { if (!perfil?.activo) return; const c = t => supabase.from(t).select('id', { count: 'exact', head: true }).eq('user_id', perfil.id).eq('estado', 'pendiente'); Promise.all([c('aprobaciones'), c('firmas_firmantes')]).then(([x, y]) => { setPend((x.count || 0) + (y.count || 0)); setPendF(y.count || 0) }) }, [perfil, vista])
   if (sesion === undefined) return null
   if (recuperar) return <NuevaClave onListo={() => setRecuperar(false)} />
   if (!sesion) return <Auth />
@@ -1116,7 +1383,8 @@ function Principal() {
         <button className={'tab' + (vista === 'links' ? ' on' : '')} onClick={() => setVista('links')}>Accesos</button>
         <div className="masw"><button className={'tab' + (['apr', 'trash', 'users', 'log', 'fav'].includes(vista) ? ' on' : '')} onClick={e => { e.stopPropagation(); setMas(mas === 'mas' ? false : 'mas') }}>Más{pend ? ` (${pend})` : ''} ▾</button>
           {mas === 'mas' && <div className="ctx mas" onClick={e => e.stopPropagation()}>
-            <button onClick={() => { setVista('apr'); setMas(false) }}>Mis aprobaciones{pend ? ` (${pend})` : ''}</button>
+            <button onClick={() => { setVista('apr'); setMas(false) }}>Mis aprobaciones{pend - pendF ? ` (${pend - pendF})` : ''}</button>
+            <button onClick={() => { setVista('firmas'); setMas(false) }}>Mis firmas{pendF ? ` (${pendF})` : ''}</button>
             <button onClick={() => { setVista('fav'); setMas(false) }}>⭐ Destacados</button>
             <button onClick={() => { setVista('trash'); setMas(false) }}>Papelera</button>
             {perfil.rol === 'admin' && <button onClick={() => { setVista('users'); setMas(false) }}>Usuarios</button>}
@@ -1124,12 +1392,16 @@ function Principal() {
         <div className="avw"><button className="av" title="Mi cuenta" onClick={e => { e.stopPropagation(); setCuenta(!cuenta) }}>{(perfil.nombre || perfil.email || '?')[0].toUpperCase()}</button>
           {cuenta && <MiCuenta perfil={perfil} onNombre={n => setPerfil({ ...perfil, nombre: n })} />}</div>
       </header>
-      {vista === 'docs' ? <Drive perfil={perfil} q={q} inicio={inicio} irVista={setVista} /> : vista === 'proy' ? <Proyectos perfil={perfil} onAbrir={abrir} /> : vista === 'equipos' ? <Equipos perfil={perfil} /> : vista === 'tareas' ? <Tareas perfil={perfil} /> : vista === 'opor' ? <Oportunidades perfil={perfil} /> : vista === 'hab' ? <Habilitantes perfil={perfil} /> : vista === 'apr' ? <MisAprobaciones perfil={perfil} /> : vista === 'ind' ? <Indicadores perfil={perfil} /> : vista === 'fav' ? <Destacados onAbrir={abrir} /> : vista === 'links' ? <Accesos perfil={perfil} /> : vista === 'trash' ? <Papelera perfil={perfil} /> : vista === 'log' ? <Actividad /> : <Usuarios perfil={perfil} />}
+      {vista === 'docs' ? <Drive perfil={perfil} q={q} inicio={inicio} irVista={setVista} /> : vista === 'proy' ? <Proyectos perfil={perfil} onAbrir={abrir} /> : vista === 'equipos' ? <Equipos perfil={perfil} /> : vista === 'tareas' ? <Tareas perfil={perfil} /> : vista === 'opor' ? <Oportunidades perfil={perfil} /> : vista === 'hab' ? <Habilitantes perfil={perfil} /> : vista === 'firmas' ? <Firmas perfil={perfil} /> : vista === 'pqrs' ? <Pqrs perfil={perfil} /> : vista === 'apr' ? <MisAprobaciones perfil={perfil} /> : vista === 'ind' ? <Indicadores perfil={perfil} /> : vista === 'fav' ? <Destacados onAbrir={abrir} /> : vista === 'links' ? <Accesos perfil={perfil} /> : vista === 'trash' ? <Papelera perfil={perfil} /> : vista === 'log' ? <Actividad /> : <Usuarios perfil={perfil} />}
     </div>
   )
 }
 
 export default function App() {
-  const tk = new URLSearchParams(window.location.search).get('s')
-  return tk ? <Compartido token={tk} /> : <Principal />
+  const q = new URLSearchParams(window.location.search)
+  if (q.get('s')) return <Compartido token={q.get('s')} />
+  if (q.get('encuesta')) return <EncuestaPublica token={q.get('encuesta')} />
+  if (q.get('firma')) return <FirmaPublica token={q.get('firma')} />
+  if (q.has('pqrs')) return <PqrsPublica />
+  return <Principal />
 }
