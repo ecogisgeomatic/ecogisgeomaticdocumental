@@ -59,11 +59,11 @@ const crearProyectoCompleto = async (padreId, hermanos, perfil, cliente, nombre)
   const { data, error } = await supabase.from('folders').insert({ nombre: `${cod}_${limpio(cliente)}_${limpio(nombre)}`, parent_id: padreId, color: '#2a2aff', created_by: perfil.id }).select().single()
   if (error) return { error }
   await supabase.from('folders').insert(SUB_PROYECTO.map(n => ({ nombre: n, parent_id: data.id, color: '#2a2aff', created_by: perfil.id })))
-  await supabase.from('proyectos').insert({ folder_id: data.id, codigo: cod, nombre: nombre.trim(), cliente: cliente.trim(), created_by: perfil.id })
+  const { data: proyecto } = await supabase.from('proyectos').insert({ folder_id: data.id, codigo: cod, nombre: nombre.trim(), cliente: cliente.trim(), created_by: perfil.id }).select().single()
   registrar('Creó proyecto', `${cod} ${nombre.trim()}`)
-  return { data }
+  return { data, proyecto }
 }
-const hoyStr = () => new Date().toISOString().slice(0, 10)
+const hoyStr = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10) }
 const GRUPOS = [
   { t: 'Gestión', items: [['proy', 'Proyectos'], ['tareas', 'Tareas y cronograma'], ['equipos', 'Equipos y reservas'], ['firmas', 'Firmas electrónicas'], ['ind', 'Indicadores']] },
   { t: 'Comercial', items: [['opor', 'Oportunidades'], ['hab', 'Documentos habilitantes'], ['pqrs', 'PQRS (posventa)']] }
@@ -82,6 +82,135 @@ const EST_Q = { recibida: 'Recibida', en_tramite: 'En trámite', respondida: 'Re
 const TIPO_Q = { peticion: 'Petición', queja: 'Queja', reclamo: 'Reclamo', sugerencia: 'Sugerencia' }
 const pin6 = () => String(Math.floor(100000 + Math.random() * 900000))
 const wa = t => 'https://wa.me/?text=' + encodeURIComponent(t)
+const PERFIL_KEY = 'geoteca_perfil', CAT_KEY = 'geoteca_cat'
+const leerJSON = k => { try { return JSON.parse(localStorage.getItem(k)) } catch { return null } }
+const leerCat = () => leerJSON(CAT_KEY) || { proyectos: [], equipos: [] }
+const refrescarCat = async () => {
+  if (!navigator.onLine) return leerCat()
+  try {
+    const { data: p } = await supabase.from('proyectos').select('id,codigo,nombre,cliente,folder_id,estado').neq('estado', 'cerrado').order('codigo', { ascending: false })
+    const { data: e } = await supabase.from('equipos').select('id,codigo,nombre,tipo').eq('estado', 'operativo').order('codigo')
+    if (p && e) localStorage.setItem(CAT_KEY, JSON.stringify({ proyectos: p, equipos: e }))
+  } catch { /* sin conexión: se usa lo guardado */ }
+  return leerCat()
+}
+const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, c => (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16)))
+const abrirIDB = () => new Promise((ok, no) => { const r = indexedDB.open('geoteca', 1); r.onupgradeneeded = () => r.result.createObjectStore('reportes', { keyPath: 'id' }); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error) })
+const idbTodos = async () => { const db = await abrirIDB(); return new Promise((ok, no) => { const q = db.transaction('reportes').objectStore('reportes').getAll(); q.onsuccess = () => ok(q.result); q.onerror = () => no(q.error) }) }
+const idbPoner = async r => { const db = await abrirIDB(); return new Promise((ok, no) => { const t = db.transaction('reportes', 'readwrite'); t.objectStore('reportes').put(r); t.oncomplete = ok; t.onerror = () => no(t.error) }) }
+const idbBorrar = async id => { const db = await abrirIDB(); return new Promise((ok, no) => { const t = db.transaction('reportes', 'readwrite'); t.objectStore('reportes').delete(id); t.oncomplete = ok; t.onerror = () => no(t.error) }) }
+const avisarReportes = () => window.dispatchEvent(new Event('geoteca-reportes'))
+const comprimir = (file, max = 1600) => new Promise(ok => {
+  const img = new Image()
+  img.onload = () => { const k = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); c.toBlob(b => ok(b || file), 'image/jpeg', 0.8); URL.revokeObjectURL(img.src) }
+  img.onerror = () => ok(file); img.src = URL.createObjectURL(file)
+})
+const ubicar = (espera = 15000) => new Promise(ok => navigator.geolocation ? navigator.geolocation.getCurrentPosition(p => ok({ lat: +p.coords.latitude.toFixed(6), lng: +p.coords.longitude.toFixed(6), prec: Math.round(p.coords.accuracy) }), () => ok(null), { enableHighAccuracy: true, timeout: espera, maximumAge: 60000 }) : ok(null))
+const CHK_SEG = ['Elementos de protección personal completos', 'Botiquín de primeros auxilios', 'Comunicación disponible (celular o radio) y punto de contacto informado', 'Plan de emergencia conocido por el equipo', 'Riesgos evaluados (terreno, clima, orden público, fauna)', 'Salida reportada al jefe inmediato']
+const CHK_DRON = ['Piloto con licencia o certificación vigente según la normativa aeronáutica', 'Zona y espacio aéreo sin restricciones verificados', 'Clima y viento aptos para el vuelo', 'Baterías cargadas y equipo revisado (hélices, GPS, control)', 'Plan de vuelo y zona de seguridad definidos', 'Personal ajeno alejado de la zona de operación']
+const CLIMAS = ['Despejado', 'Nublado', 'Lluvia', 'Viento fuerte', 'Calor extremo']
+
+const pdfBuilder = async () => {
+  await cargarLib('https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js', 'PDFLib')
+  const { PDFDocument, StandardFonts, rgb } = window.PDFLib
+  const pdf = await PDFDocument.create(), font = await pdf.embedFont(StandardFonts.Helvetica), bold = await pdf.embedFont(StandardFonts.HelveticaBold)
+  const W = 595, H = 842, m = 50, c = rgb(0.22, 0.28, 0.27), az = rgb(0.16, 0.16, 1), st = { page: pdf.addPage([W, H]), y: H - 60 }
+  const nueva = () => { st.page = pdf.addPage([W, H]); st.y = H - 60 }
+  const limp = x => String(x ?? '').replace(/[^\x20-\x7E\xA0-\xFF]/g, '?')
+  const lineas = (txt, f, size, ancho) => { const out = []; for (const par of txt.split('\n')) { let l = ''; for (const w of par.split(' ')) { const t2 = l ? l + ' ' + w : w; if (f.widthOfTextAtSize(t2, size) > ancho && l) { out.push(l); l = w } else l = t2 } out.push(l) } return out }
+  const t = (txt, o = {}) => { const f = o.bold ? bold : font, size = o.size || 10; for (const ln of lineas(limp(txt), f, size, W - 2 * m - (o.x || 0))) { if (st.y < 60) nueva(); st.page.drawText(ln, { x: m + (o.x || 0), y: st.y, size, font: f, color: o.color || c }); st.y -= size + 4 } st.y -= o.dy ?? 2 }
+  const h = txt => { st.y -= 8; t(txt, { bold: true, size: 12, color: az, dy: 4 }) }
+  return { pdf, st, t, h, nueva, m, rgb, font, c, limpio: limp }
+}
+const altaDoc = async ({ carpeta, prefijo, blob, nombre, tipo, categoria, uid, unombre, extra = {} }) => {
+  const path = `${carpeta || 'raiz'}/${prefijo}-${nombre.replace(/[^\w.\-]/g, '_')}`
+  const up = await supabase.storage.from('documentos').upload(path, blob, { contentType: tipo })
+  if (up.error && !/exist|duplicate/i.test(up.error.message)) throw up.error
+  const { data: ex } = await supabase.from('documents').select('*').eq('path', path).maybeSingle(); if (ex) return ex
+  const { data, error } = await supabase.from('documents').insert({ folder_id: carpeta, nombre, path, tamano: blob.size, tipo, categoria, uploaded_by: uid, uploaded_by_nombre: unombre, ...extra }).select().single()
+  if (error) throw error; return data
+}
+const armarPdfReporte = async (r, pr, equipos) => {
+  const b = await pdfBuilder(), { t, h, st, pdf, nueva, m, rgb } = b
+  t('REPORTE DE CAMPO', { bold: true, size: 18, dy: 6 }); t(`Ecogis Geomatic S.A.S. · ${pr.codigo} · ${pr.nombre}`, { size: 11, dy: 8 })
+  t(`Fecha: ${r.fecha}   Hora: ${r.hora}   Elaboró: ${r.autor}`); t(`Cliente: ${pr.cliente || '-'}`)
+  t(`Ubicación: ${r.ubicacion ? `${r.ubicacion.lat}, ${r.ubicacion.lng} (precisión ${r.ubicacion.prec} m)` : 'no registrada'}`)
+  t(`Clima: ${r.clima || '-'}   Personal en campo: ${r.personal || '-'}`)
+  t(`Equipos: ${(r.equipos || []).map(id => equipos.find(e => e.id === id)?.nombre || id).join(', ') || '-'}`)
+  h('Actividades realizadas'); t(r.actividades); h('Observaciones y novedades'); t(r.observaciones || 'Sin novedades.')
+  if (r.incidente) { h('ACCIDENTE / INCIDENTE'); t(r.incidente_detalle || 'Sin detalle', { color: rgb(0.8, 0.1, 0.1) }) }
+  h('Lista de chequeo de seguridad'); CHK_SEG.forEach((x, i) => t(`${r.checklist?.[i] ? '[X]' : '[  ]'} ${x}`))
+  if (r.dron) { h('Operación con dron'); CHK_DRON.forEach((x, i) => t(`${r.dron_checklist?.[i] ? '[X]' : '[  ]'} ${x}`)) }
+  if (r.fotos.length) {
+    h('Registro fotográfico')
+    for (let i = 0; i < r.fotos.length; i += 2) {
+      const par = r.fotos.slice(i, i + 2), imgs = []
+      for (const ft of par) imgs.push(await pdf.embedJpg(await (await comprimir(ft.blob, 800)).arrayBuffer()))
+      const alto = Math.max(...imgs.map(im => (im.height / im.width) * 235))
+      if (st.y - alto - 30 < 50) nueva()
+      imgs.forEach((im, k) => st.page.drawImage(im, { x: m + k * 255, y: st.y - (im.height / im.width) * 235, width: 235, height: (im.height / im.width) * 235 }))
+      st.y -= alto + 4
+      par.forEach((ft, k) => st.page.drawText(b.limpio(`${i + k + 1}. ${ft.pie || ''}${ft.lat ? ` (${ft.lat}, ${ft.lng})` : ''}`).slice(0, 72), { x: m + k * 255, y: st.y - 8, size: 8, font: b.font, color: b.c }))
+      st.y -= 22
+    }
+  }
+  return pdf.save()
+}
+const subirReporte = async r => {
+  const prog = r.progreso || (r.progreso = { fotos: {} })
+  r.estado = 'enviando'; await idbPoner(r); avisarReportes()
+  const { data: pr, error: e0 } = await supabase.from('proyectos').select('*').eq('id', r.proyecto_id).single(); if (e0) throw e0
+  let carpeta = pr.folder_id
+  if (carpeta) { const { data: sf } = await supabase.from('folders').select('id').eq('parent_id', carpeta).eq('nombre', '03_Captura-de-Campo').is('deleted_at', null).maybeSingle(); if (sf) carpeta = sf.id }
+  const f8 = r.fecha.replaceAll('-', ''), cod = pr.codigo || 'SIN-CODIGO', base = { carpeta, prefijo: r.id.slice(0, 8), uid: r.user_id, unombre: r.autor }
+  for (const [i, ft] of r.fotos.entries()) {
+    if (prog.fotos[ft.id]) continue
+    const d = await altaDoc({ ...base, blob: ft.blob, nombre: `${cod}_Foto-Campo-${String(i + 1).padStart(2, '0')}_v01_${f8}.jpg`, tipo: 'image/jpeg', categoria: 'Imagen', extra: { etiquetas: ['campo', 'reporte'] } })
+    prog.fotos[ft.id] = d.id; await idbPoner(r)
+  }
+  if (!prog.fila) {
+    const { error } = await supabase.from('reportes_campo').upsert({ id: r.id, proyecto_id: r.proyecto_id, user_id: r.user_id, fecha: r.fecha, hora: r.hora, ubicacion: r.ubicacion, clima: r.clima || null, personal: r.personal || null, equipos: r.equipos, actividades: r.actividades, observaciones: r.observaciones || null, checklist: r.checklist, dron: r.dron, dron_checklist: r.dron_checklist, incidente: r.incidente, incidente_detalle: r.incidente_detalle || null, fotos: r.fotos.map(x => ({ doc: prog.fotos[x.id], pie: x.pie, lat: x.lat, lng: x.lng, at: x.at })) })
+    if (error) throw error; prog.fila = true; await idbPoner(r)
+  }
+  if (!prog.pdf) {
+    const bytes = await armarPdfReporte(r, pr, leerCat().equipos)
+    const d = await altaDoc({ ...base, blob: new Blob([bytes], { type: 'application/pdf' }), nombre: `${cod}_Reporte-Campo-${r.hora.replace(':', '')}_v01_${f8}.pdf`, tipo: 'application/pdf', categoria: 'Informe técnico' })
+    await supabase.from('reportes_campo').update({ pdf_document_id: d.id }).eq('id', r.id); prog.pdf = d.id; await idbPoner(r)
+  }
+  if (r.incidente && !prog.evento) { await supabase.from('eventos_sgi').insert({ tipo: 'accidente', fecha: r.fecha, detalle: `Reporte de campo ${cod}: ${r.incidente_detalle || 'sin detalle'}`, created_by: r.user_id }); prog.evento = true; await idbPoner(r) }
+  await idbBorrar(r.id); registrar('Envió reporte de campo', `${cod} ${r.fecha}`)
+}
+let sincronizando = false
+const sincronizarReportes = async () => {
+  if (sincronizando || !navigator.onLine) return
+  sincronizando = true
+  try {
+    const { data: { session } } = await supabase.auth.getSession(); if (!session) return
+    for (const r of await idbTodos()) {
+      if (!['pendiente', 'error', 'enviando'].includes(r.estado)) continue
+      try { await subirReporte(r) } catch (e) { r.estado = 'error'; r.error = String(e.message || e).slice(0, 160); await idbPoner(r); avisarReportes() }
+    }
+  } finally { sincronizando = false; avisarReportes() }
+}
+const generarActa = async (p, perfil) => {
+  const { data: subs } = await supabase.from('folders').select('id,nombre').eq('parent_id', p.folder_id).is('deleted_at', null)
+  const ent = subs?.find(x => x.nombre.startsWith('06_')), cie = subs?.find(x => x.nombre.startsWith('07_'))
+  const { data: docs } = ent ? await supabase.from('documents').select('*').eq('folder_id', ent.id).is('deleted_at', null).order('nombre') : { data: [] }
+  const b = await pdfBuilder(), { t, h, st, m, c } = b, hoy = hoyStr()
+  t('ACTA DE ENTREGA', { bold: true, size: 18, dy: 6 }); t('Ecogis Geomatic S.A.S.', { size: 11, dy: 10 })
+  t(`Proyecto: ${p.codigo} · ${p.nombre}`, { bold: true }); t(`Cliente: ${p.cliente || '-'}`); t(`Responsable del proyecto: ${p.responsable || '-'}`)
+  t(`Inicio: ${p.fecha_inicio || '-'}   Entrega prevista: ${p.fecha_fin_prevista || '-'}   Fecha de esta acta: ${hoy}`)
+  if (p.descripcion) { h('Descripción'); t(p.descripcion) }
+  h('Productos entregados')
+  if (docs?.length) docs.forEach((d, i) => t(`${i + 1}. ${d.nombre}  (versión ${d.version}, ${d.estado})`)); else t('[ Relacione aquí los productos entregados ]')
+  h('Observaciones'); for (let i = 0; i < 3; i++) t('______________________________________________________________________', { dy: 6 })
+  h('Constancia'); t('Se deja constancia de la entrega de los productos relacionados en la fecha indicada.', { dy: 30 })
+  const linea = (x, y, txt) => { st.page.drawLine({ start: { x, y }, end: { x: x + 210, y }, thickness: 0.7, color: c }); st.page.drawText(b.limpio(txt), { x, y: y - 12, size: 9, font: b.font, color: c }) }
+  if (st.y < 190) b.nueva()
+  const y0 = st.y - 40; linea(m, y0, 'Entrega: Ecogis Geomatic S.A.S.'); linea(m + 260, y0, 'Recibe: Cliente'); linea(m, y0 - 55, 'Nombre y cargo'); linea(m + 260, y0 - 55, 'Nombre, cargo y documento')
+  const bytes = await b.pdf.save()
+  return altaDoc({ carpeta: cie?.id || p.folder_id, prefijo: uuid().slice(0, 8), blob: new Blob([bytes], { type: 'application/pdf' }), nombre: `${p.codigo}_Acta-de-Entrega_v01_${hoy.replaceAll('-', '')}.pdf`, tipo: 'application/pdf', categoria: 'Informe técnico', uid: perfil.id, unombre: perfil.nombre || perfil.email, extra: { estado: 'borrador' } })
+}
 const FileIcon = ({ n }) => <div className="fi" style={{ background: COL[ext(n)] || '#546e7a' }}>{ext(n).slice(0, 4) || 'file'}</div>
 const FolderIcon = ({ c }) => <svg width="46" height="46" viewBox="0 0 24 24" fill={c || '#374845'}><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z" /></svg>
 const Logo = ({ h = 40 }) => <div className="logo"><img src={logo} alt="Ecogis Geomatic SAS" height={h} /><span className="appn">{APP}</span></div>
@@ -232,10 +361,12 @@ function NuevaClave({ onListo }) {
 }
 
 function Permisos({ f, onClose, onChange }) {
-  const [users, setUsers] = useState([]), [acc, setAcc] = useState([]), [priv, setPriv] = useState(!!f.restringida)
+  const [users, setUsers] = useState([]), [acc, setAcc] = useState([]), [priv, setPriv] = useState(!!f.restringida), [gs, setGs] = useState([]), [ga, setGa] = useState([])
   const cargar = useCallback(async () => {
     const { data: u } = await supabase.from('profiles').select('id,nombre,email,rol').eq('activo', true).order('nombre'); setUsers(u || [])
     const { data: a } = await supabase.from('folder_access').select('user_id').eq('folder_id', f.id); setAcc((a || []).map(x => x.user_id))
+    const { data: g } = await supabase.from('grupos').select('*').order('nombre'); setGs(g || [])
+    const { data: gg } = await supabase.from('folder_access_grupos').select('grupo_id').eq('folder_id', f.id); setGa((gg || []).map(x => x.grupo_id))
   }, [f.id])
   useEffect(() => { cargar() }, [cargar])
   const alternar = async () => {
@@ -246,6 +377,7 @@ function Permisos({ f, onClose, onChange }) {
     if (on) await supabase.from('folder_access').insert({ folder_id: f.id, user_id: u.id }); else await supabase.from('folder_access').delete().eq('folder_id', f.id).eq('user_id', u.id)
     registrar(on ? 'Dio acceso' : 'Quitó acceso', `${f.nombre} → ${u.nombre || u.email}`); cargar()
   }
+  const darG = async (g, on) => { if (on) await supabase.from('folder_access_grupos').insert({ folder_id: f.id, grupo_id: g.id }); else await supabase.from('folder_access_grupos').delete().eq('folder_id', f.id).eq('grupo_id', g.id); registrar(on ? 'Dio acceso a grupo' : 'Quitó acceso a grupo', `${f.nombre} → ${g.nombre}`); cargar() }
   const miembros = users.filter(u => u.rol !== 'admin')
   return (
     <div className="modal" onClick={onClose}><div className="dlg" onClick={e => e.stopPropagation()}>
@@ -253,6 +385,7 @@ function Permisos({ f, onClose, onChange }) {
       <label className="chk"><input type="checkbox" checked={priv} onChange={alternar} /> Carpeta privada: solo las personas marcadas y los administradores</label>
       <p className="muted">Aplica también a todas sus subcarpetas y archivos.</p>
       {priv && <div className="plist">{miembros.map(u => <label key={u.id} className="prow chk"><input type="checkbox" checked={acc.includes(u.id)} onChange={e => dar(u, e.target.checked)} /> {u.nombre || u.email}</label>)}{!miembros.length && <p className="muted">Aún no hay miembros activos.</p>}</div>}
+      {priv && <><b>Grupos con acceso</b><div className="plist">{gs.map(g => <label key={g.id} className="prow chk"><input type="checkbox" checked={ga.includes(g.id)} onChange={e => darG(g, e.target.checked)} /> {g.nombre}</label>)}{!gs.length && <p className="muted">Crea grupos en Más → Usuarios.</p>}</div></>}
       <div className="dact"><button className="btn" onClick={onClose}>Listo</button></div>
     </div></div>
   )
@@ -380,6 +513,7 @@ function FichaProyecto({ p, admin, onClose, onChange, onAbrir }) {
   const [fin, setFin] = useState({ valor: '', costo: '' }), [msg, setMsg] = useState('')
   useEffect(() => { if (admin) supabase.from('proyecto_finanzas').select('*').eq('proyecto_id', p.id).maybeSingle().then(({ data }) => data && setFin({ valor: data.valor ?? '', costo: data.costo ?? '' })) }, [p.id, admin])
   const set = k => e => setF({ ...f, [k]: e.target.value })
+  const acta = async () => { setMsg('Generando acta…'); try { const d = await generarActa(p, ACTOR); registrar('Generó acta de entrega', p.codigo); setMsg(''); onClose(); onAbrir(d.folder_id) } catch (e) { setMsg('No se pudo generar el acta: ' + (e.message || e)) } }
   const guardar = async () => {
     const d = { ...f }; ['fecha_inicio', 'fecha_fin_prevista', 'fecha_entrega_real'].forEach(k => { if (!d[k]) d[k] = null }); d.satisfaccion = d.satisfaccion === '' ? null : Number(d.satisfaccion)
     const { error } = await supabase.from('proyectos').update(d).eq('id', p.id); if (error) return setMsg(error.message)
@@ -405,7 +539,7 @@ function FichaProyecto({ p, admin, onClose, onChange, onAbrir }) {
       {msg && <p className="msg">{msg}</p>}
       <EncuestasProyecto p={p} />
       <Comentarios tipo="p" id={p.id} />
-      <div className="dact">{p.folder_id && <button className="btn ghost" onClick={() => { onClose(); onAbrir(p.folder_id) }}>Abrir carpeta</button>}<button className="btn ghost" onClick={onClose}>Cancelar</button><button className="btn" onClick={guardar}>Guardar</button></div>
+      <div className="dact">{p.folder_id && <button className="btn ghost" onClick={() => { onClose(); onAbrir(p.folder_id) }}>Abrir carpeta</button>}{p.folder_id && <button className="btn ghost" onClick={acta}>Generar acta de entrega</button>}<button className="btn ghost" onClick={onClose}>Cancelar</button><button className="btn" onClick={guardar}>Guardar</button></div>
     </div></div>
   )
 }
@@ -721,6 +855,16 @@ function Reservas({ perfil, equipos }) {
 function FichaOpor({ o, us, perfil, onClose, onChange }) {
   const [f, setF] = useState({ entidad: o.entidad || '', objeto: o.objeto || '', proceso: o.proceso || '', enlace: o.enlace || '', modalidad: o.modalidad || '', valor: o.valor ?? '', fecha_cierre: o.fecha_cierre || '', responsable: o.responsable || '', estado: o.estado || 'identificada', notas: o.notas || '' })
   const [msg, setMsg] = useState(''), set = k => e => setF({ ...f, [k]: e.target.value })
+  const crearProy = async () => {
+    if (!confirm('¿Crear el proyecto con su carpeta y estructura estándar?')) return
+    const { data: raiz } = await supabase.from('folders').select('id').eq('nombre', '04_PROYECTOS').is('parent_id', null).is('deleted_at', null).maybeSingle()
+    const { data: hs } = raiz ? await supabase.from('folders').select('nombre').eq('parent_id', raiz.id) : { data: [] }
+    const { proyecto, error } = await crearProyectoCompleto(raiz?.id || null, (hs || []).map(h => h.nombre), perfil, f.entidad || 'Cliente', (f.objeto || '').slice(0, 40))
+    if (error) return setMsg(error.message)
+    if (perfil.rol === 'admin' && f.valor !== '' && proyecto) await supabase.from('proyecto_finanzas').upsert({ proyecto_id: proyecto.id, valor: Number(f.valor) })
+    await supabase.from('oportunidades').update({ proyecto_id: proyecto?.id || null }).eq('id', o.id)
+    registrar('Creó proyecto desde oportunidad', f.objeto.slice(0, 60)); onChange(); onClose()
+  }
   const guardar = async () => {
     if (!f.objeto.trim()) return setMsg('Escribe el objeto del proceso.')
     const d = vacioNull(f); if (d.enlace && !/^https?:\/\//i.test(d.enlace)) d.enlace = 'https://' + d.enlace
@@ -741,7 +885,7 @@ function FichaOpor({ o, us, perfil, onClose, onChange }) {
       </div>
       <label className="et">Notas<input value={f.notas} onChange={set('notas')} /></label>
       {msg && <p className="msg">{msg}</p>}
-      <div className="dact">{o.enlace && <a className="btn ghost" href={o.enlace} target="_blank" rel="noopener noreferrer">Abrir proceso</a>}<button className="btn ghost" onClick={onClose}>Cancelar</button><button className="btn" onClick={guardar}>Guardar</button></div>
+      <div className="dact">{o.id && f.estado === 'adjudicada' && !o.proyecto_id && <button className="btn ghost" onClick={crearProy}>Crear proyecto</button>}{o.enlace && <a className="btn ghost" href={o.enlace} target="_blank" rel="noopener noreferrer">Abrir proceso</a>}<button className="btn ghost" onClick={onClose}>Cancelar</button><button className="btn" onClick={guardar}>Guardar</button></div>
     </div></div>
   )
 }
@@ -1076,6 +1220,103 @@ function Firmas({ perfil }) {
   )
 }
 
+const Mini = ({ blob }) => { const [u, setU] = useState(); useEffect(() => { const x = URL.createObjectURL(blob); setU(x); return () => URL.revokeObjectURL(x) }, [blob]); return <img src={u} alt="" className="mini" /> }
+
+function FormReporte({ r, cat, perfil, onClose }) {
+  const [f, setF] = useState(r || { id: uuid(), proyecto_id: '', fecha: hoyStr(), hora: new Date().toTimeString().slice(0, 5), ubicacion: null, clima: '', personal: '', equipos: [], actividades: '', observaciones: '', checklist: {}, dron: false, dron_checklist: {}, incidente: false, incidente_detalle: '', fotos: [] })
+  const [msg, setMsg] = useState(''), [proc, setProc] = useState(false), cam = useRef(), gal = useRef()
+  const set = k => e => setF(x => ({ ...x, [k]: e.target.value }))
+  const ubic = async () => { setProc(true); const u = await ubicar(); setProc(false); if (u) setF(x => ({ ...x, ubicacion: u })); else setMsg('No se pudo obtener la ubicación. Revisa el permiso de ubicación del navegador.') }
+  useEffect(() => { if (!r) ubic() }, [])
+  const fotos = async files => {
+    setProc(true); const u = await ubicar(8000), nuevas = []
+    for (const file of files) nuevas.push({ id: uuid(), blob: await comprimir(file), lat: u?.lat ?? f.ubicacion?.lat ?? null, lng: u?.lng ?? f.ubicacion?.lng ?? null, at: new Date().toISOString(), pie: '' })
+    setF(x => ({ ...x, fotos: [...x.fotos, ...nuevas] })); setProc(false)
+  }
+  const guardar = async enviar => {
+    if (!f.proyecto_id) return setMsg('Elige el proyecto.'); if (!f.actividades.trim()) return setMsg('Describe las actividades realizadas.')
+    await idbPoner({ ...f, estado: enviar ? 'pendiente' : 'borrador', error: null, user_id: perfil.id, autor: perfil.nombre || perfil.email, creado_at: f.creado_at || new Date().toISOString(), progreso: f.progreso || { fotos: {} } })
+    avisarReportes(); if (enviar) sincronizarReportes(); onClose()
+  }
+  const chk = (lista, clave) => lista.map((x, i) => <label key={i} className="chk"><input type="checkbox" checked={!!f[clave][i]} onChange={e => setF(y => ({ ...y, [clave]: { ...y[clave], [i]: e.target.checked } }))} /> {x}</label>)
+  return (
+    <div className="modal" onClick={onClose}><div className="dlg" onClick={e => e.stopPropagation()}>
+      <h3>{r ? 'Editar reporte de campo' : 'Nuevo reporte de campo'}</h3>
+      <div className="frm">
+        <label className="et2">Proyecto<select value={f.proyecto_id} onChange={set('proyecto_id')}><option value="">Elige el proyecto…</option>{cat.proyectos.map(p => <option key={p.id} value={p.id}>{p.codigo} · {p.nombre}</option>)}</select></label>
+        <label>Fecha<input type="date" value={f.fecha} onChange={set('fecha')} /></label><label>Hora<input type="time" value={f.hora} onChange={set('hora')} /></label>
+        <label>Clima<select value={f.clima} onChange={set('clima')}><option value="">—</option>{CLIMAS.map(c => <option key={c}>{c}</option>)}</select></label>
+        <label>Personal en campo<input value={f.personal} onChange={set('personal')} placeholder="Nombres" /></label>
+      </div>
+      <p>📍 {f.ubicacion ? `${f.ubicacion.lat}, ${f.ubicacion.lng} (±${f.ubicacion.prec} m)` : 'Sin ubicación'} <button className="chip si" onClick={ubic}>Tomar ubicación</button></p>
+      <b>Equipos usados</b><div className="plist">{cat.equipos.map(e => <label key={e.id} className="chk"><input type="checkbox" checked={f.equipos.includes(e.id)} onChange={x => setF(y => ({ ...y, equipos: x.target.checked ? [...y.equipos, e.id] : y.equipos.filter(i => i !== e.id) }))} /> {e.codigo} · {e.nombre}</label>)}{!cat.equipos.length && <small>Sin equipos cargados (se actualizan cuando abres la página con internet).</small>}</div>
+      <label className="et">Actividades realizadas<textarea rows={4} value={f.actividades} onChange={set('actividades')} style={{ font: 'inherit', padding: 10, border: '1px solid var(--line)', borderRadius: 8 }} /></label>
+      <label className="et">Observaciones y novedades<textarea rows={3} value={f.observaciones} onChange={set('observaciones')} style={{ font: 'inherit', padding: 10, border: '1px solid var(--line)', borderRadius: 8 }} /></label>
+      <b>Lista de chequeo de seguridad</b>{chk(CHK_SEG, 'checklist')}
+      <label className="chk"><b><input type="checkbox" checked={f.dron} onChange={e => setF({ ...f, dron: e.target.checked })} /> Hubo operación con dron</b></label>{f.dron && chk(CHK_DRON, 'dron_checklist')}
+      <label className="chk"><b><input type="checkbox" checked={f.incidente} onChange={e => setF({ ...f, incidente: e.target.checked })} /> Hubo accidente o incidente</b></label>{f.incidente && <label className="et">¿Qué pasó?<input value={f.incidente_detalle} onChange={set('incidente_detalle')} /></label>}
+      <b>Fotos ({f.fotos.length})</b>
+      <div className="lnk"><button className="btn ghost" onClick={() => cam.current.click()}>📷 Tomar foto</button><button className="btn ghost" onClick={() => gal.current.click()}>🖼 Elegir de la galería</button>{proc && <small>Procesando…</small>}</div>
+      <input ref={cam} type="file" accept="image/*" capture="environment" hidden onChange={e => { fotos([...e.target.files]); e.target.value = '' }} /><input ref={gal} type="file" accept="image/*" multiple hidden onChange={e => { fotos([...e.target.files]); e.target.value = '' }} />
+      <div className="fotos">{f.fotos.map(ft => <div key={ft.id}><Mini blob={ft.blob} /><input placeholder="Descripción" value={ft.pie} onChange={e => setF(y => ({ ...y, fotos: y.fotos.map(z => (z.id === ft.id ? { ...z, pie: e.target.value } : z)) }))} /><button className="x2" onClick={() => setF(y => ({ ...y, fotos: y.fotos.filter(z => z.id !== ft.id) }))}>✕ quitar</button></div>)}</div>
+      {msg && <p className="msg">{msg}</p>}
+      <div className="dact"><button className="btn ghost" onClick={onClose}>Cancelar</button><button className="btn ghost" onClick={() => guardar(false)}>Guardar borrador</button><button className="btn" onClick={() => guardar(true)}>Guardar y enviar</button></div>
+      <small>{navigator.onLine ? 'Se enviará ahora.' : 'Sin internet: se guarda en tu celular y se envía solo cuando vuelva la señal.'}</small>
+    </div></div>
+  )
+}
+
+function Campo({ perfil }) {
+  const [l, setL] = useState([]), [edit, setEdit] = useState(null), [cat, setCat] = useState(leerCat()), [srv, setSrv] = useState([]), [prev, setPrev] = useState(null)
+  const cargar = useCallback(async () => setL((await idbTodos()).sort((a, b) => (b.creado_at || '').localeCompare(a.creado_at || ''))), [])
+  useEffect(() => {
+    cargar(); window.addEventListener('geoteca-reportes', cargar); navigator.storage?.persist?.()
+    refrescarCat().then(setCat)
+    if (navigator.onLine) supabase.from('reportes_campo').select('id,fecha,hora,proyecto_id,actividades,pdf_document_id').order('created_at', { ascending: false }).limit(15).then(({ data }) => setSrv(data || []))
+    return () => window.removeEventListener('geoteca-reportes', cargar)
+  }, [cargar])
+  const pn = id => { const p = cat.proyectos.find(x => x.id === id); return p ? `${p.codigo} · ${p.nombre}` : 'Proyecto' }
+  const ESTADO = { borrador: ['borrador', 'Borrador'], pendiente: ['revision', navigator.onLine ? 'En cola' : 'Esperando internet'], enviando: ['revision', 'Enviando…'], error: ['borrador', 'Error'] }
+  const verPdf = async id => { const { data } = await supabase.from('documents').select('*').eq('id', id).maybeSingle(); if (data) setPrev(data) }
+  return (
+    <div className="panel solo">
+      <div className="head"><div><h2>Reportes de campo</h2><p className="muted">Funcionan sin internet: se guardan en tu celular y se envían solos cuando vuelve la señal (con la página abierta).</p></div><button className="btn" onClick={() => setEdit({})}>＋ Nuevo reporte</button></div>
+      {l.length > 0 && <><h3 className="gt">En este celular ({l.length})</h3>
+        {navigator.onLine && l.some(r => r.estado !== 'borrador') && <button className="btn ghost" onClick={() => sincronizarReportes()}>Enviar ahora</button>}
+        {l.map(r => { const [c, t] = ESTADO[r.estado] || ESTADO.borrador; return <div key={r.id} className="com"><b>{pn(r.proyecto_id)}</b> · {r.fecha} {r.hora} <span className={'est ' + c}>{t}</span><small>{r.fotos.length} foto(s) · {r.actividades.slice(0, 80)}</small>{r.error && <small className="rojo">{r.error}</small>}
+          <div className="lnk">{r.estado !== 'enviando' && <button className="chip si" onClick={() => setEdit(r)}>Editar</button>}{r.estado === 'borrador' && <button className="btn" onClick={async () => { await idbPoner({ ...r, estado: 'pendiente' }); avisarReportes(); sincronizarReportes() }}>Enviar</button>}
+            {r.estado !== 'enviando' && <button className="chip no" onClick={async () => { if (confirm('¿Eliminar este reporte del celular? No se podrá recuperar.')) { await idbBorrar(r.id); avisarReportes() } }}>Eliminar</button>}</div></div> })}</>}
+      <h3 className="gt">Enviados recientemente</h3>
+      {!srv.length ? <div className="vacio">{navigator.onLine ? 'Aún no hay reportes enviados' : 'Se muestran cuando tengas internet'}</div> : srv.map(r => <div key={r.id} className="apr"><b>{pn(r.proyecto_id)}</b> · {r.fecha} {r.hora} <small>{(r.actividades || '').slice(0, 100)}</small>{r.pdf_document_id && <button className="chip si" onClick={() => verPdf(r.pdf_document_id)}>Ver PDF</button>}</div>)}
+      {edit && <FormReporte r={edit.id ? edit : null} cat={cat} perfil={perfil} onClose={() => setEdit(null)} />}
+      {prev && <Preview d={prev} onClose={() => setPrev(null)} />}
+    </div>
+  )
+}
+
+function SinConexion({ onCampo }) {
+  return <div className="panel solo"><div className="vacio"><b>Sin conexión a internet</b><p>Esta sección necesita internet. Puedes seguir llenando reportes de campo: se guardan en tu celular y se envían solos cuando vuelva la señal.</p><button className="btn" onClick={onCampo}>Ir a Reportes de campo</button></div></div>
+}
+
+function Grupos() {
+  const [gs, setGs] = useState([]), [ms, setMs] = useState([]), [us, setUs] = useState([])
+  const cargar = useCallback(async () => {
+    const { data: g } = await supabase.from('grupos').select('*').order('nombre'); setGs(g || [])
+    const { data: m } = await supabase.from('grupo_miembros').select('*'); setMs(m || [])
+    const { data: u } = await supabase.from('profiles').select('id,nombre,email').eq('activo', true).order('nombre'); setUs(u || [])
+  }, [])
+  useEffect(() => { cargar() }, [cargar])
+  const crear = async () => { const n = prompt('Nombre del grupo (ej. Técnica, Administrativa, Talento Humano):'); if (!n?.trim()) return; const { error } = await supabase.from('grupos').insert({ nombre: n.trim() }); if (error) alert(error.message); cargar() }
+  const marcar = async (g, u, on) => { if (on) await supabase.from('grupo_miembros').insert({ grupo_id: g.id, user_id: u.id }); else await supabase.from('grupo_miembros').delete().eq('grupo_id', g.id).eq('user_id', u.id); registrar(on ? 'Agregó a grupo' : 'Quitó de grupo', `${g.nombre}: ${u.nombre || u.email}`); cargar() }
+  return (
+    <div><div className="head"><div><h3 className="gt">Grupos por área</h3><p className="muted">Dale acceso a una carpeta privada a un grupo completo (clic derecho en la carpeta → Permisos).</p></div><button className="btn" onClick={crear}>＋ Nuevo grupo</button></div>
+      {!gs.length && <div className="vacio">Aún no hay grupos</div>}
+      {gs.map(g => <div key={g.id} className="com"><b>{g.nombre}</b> <button className="x2" onClick={async () => { if (confirm(`¿Eliminar el grupo "${g.nombre}"?`)) { await supabase.from('grupos').delete().eq('id', g.id); cargar() } }}>✕ eliminar grupo</button>
+        <div className="plist">{us.map(u => <label key={u.id} className="chk"><input type="checkbox" checked={ms.some(m => m.grupo_id === g.id && m.user_id === u.id)} onChange={e => marcar(g, u, e.target.checked)} /> {u.nombre || u.email}</label>)}</div></div>)}
+    </div>
+  )
+}
+
 function Drive({ perfil, q, inicio, irVista }) {
   const [folders, setFolders] = useState([]), [docs, setDocs] = useState([]), [cur, setCur] = useState(null), [idx, setIdx] = useState(0)
   const [vista, setVista] = useState('grid'), [ft, setFt] = useState(''), [menu, setMenu] = useState(null), [nuevo, setNuevo] = useState(false)
@@ -1140,7 +1381,7 @@ function Drive({ perfil, q, inicio, irVista }) {
     const path = `${d.folder_id || 'raiz'}/${Date.now()}-${file.name.replace(/[^\w.\-]/g, '_')}`
     const ue = await enviar(file, path, file.name); if (ue) { setBusy(false); return setMsg(ue.message) }
     await supabase.from('document_versions').insert({ document_id: d.id, version: d.version, path: d.path, tamano: d.tamano, nombre: d.nombre, created_by: perfil.id })
-    const { error } = await supabase.from('documents').update({ path, tamano: file.size, tipo: file.type, version: ver.trim() }).eq('id', d.id)
+    const { error } = await supabase.from('documents').update({ path, tamano: file.size, tipo: file.type, version: ver.trim(), estado: 'borrador' }).eq('id', d.id)
     if (error) setMsg(error.message); else registrar('Subió nueva versión', `${d.nombre} → v${ver.trim()}`)
     setBusy(false); cargar()
   }
@@ -1300,7 +1541,7 @@ function Usuarios({ perfil }) {
     <div className="panel solo"><h2>Usuarios</h2><p className="muted">Quienes se registran quedan inactivos hasta que los actives aquí.</p>
       <table><thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Acceso</th></tr></thead><tbody>{users.map(u => <tr key={u.id}><td>{u.nombre || '—'}</td><td>{u.email}</td>
         <td><select disabled={u.id === perfil.id} value={u.rol} onChange={e => cambiar(u.id, { rol: e.target.value })}><option value="miembro">Miembro</option><option value="admin">Administrador</option></select></td>
-        <td><button className={'chip ' + (u.activo ? 'si' : 'no')} disabled={u.id === perfil.id} onClick={() => cambiar(u.id, { activo: !u.activo })}>{u.activo ? 'Activo' : 'Inactivo · activar'}</button></td></tr>)}</tbody></table></div>
+        <td><button className={'chip ' + (u.activo ? 'si' : 'no')} disabled={u.id === perfil.id} onClick={() => cambiar(u.id, { activo: !u.activo })}>{u.activo ? 'Activo' : 'Inactivo · activar'}</button></td></tr>)}</tbody></table><Grupos /></div>
   )
 }
 
@@ -1355,18 +1596,30 @@ function Accesos({ perfil }) {
 }
 
 function Principal() {
-  const [sesion, setSesion] = useState(undefined), [perfil, setPerfil] = useState(null), [vista, setVista] = useState('docs'), [q, setQ] = useState(''), [cuenta, setCuenta] = useState(false), [recuperar, setRecuperar] = useState(false), [mas, setMas] = useState(false), [inicio, setInicio] = useState(null), [pend, setPend] = useState(0), [pendF, setPendF] = useState(0)
+  const [sesion, setSesion] = useState(undefined), [perfil, setPerfil] = useState(null), [vista, setVista] = useState('docs'), [q, setQ] = useState(''), [cuenta, setCuenta] = useState(false), [recuperar, setRecuperar] = useState(false), [mas, setMas] = useState(false), [inicio, setInicio] = useState(null), [pend, setPend] = useState(0), [pendF, setPendF] = useState(0), [offline, setOffline] = useState(!navigator.onLine), [pendCampo, setPendCampo] = useState(0)
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSesion(data.session))
-    const { data: s } = supabase.auth.onAuthStateChange((ev, ses) => { if (ev === 'PASSWORD_RECOVERY') setRecuperar(true); setSesion(ses) }); return () => s.subscription.unsubscribe()
+    const cache = () => { const c = leerJSON(PERFIL_KEY); return c ? { user: { id: c.id }, offline: true } : null }
+    supabase.auth.getSession().then(({ data }) => setSesion(data.session || (!navigator.onLine ? cache() : null))).catch(() => setSesion(cache()))
+    const on = () => { setOffline(false); supabase.auth.getSession().then(({ data }) => data.session && setSesion(data.session)) }, off = () => setOffline(true)
+    window.addEventListener('online', on); window.addEventListener('offline', off)
+    const { data: s } = supabase.auth.onAuthStateChange((ev, ses) => { if (ev === 'PASSWORD_RECOVERY') setRecuperar(true); if (!ses && !navigator.onLine && leerJSON(PERFIL_KEY)) return; setSesion(ses) }); return () => { s.subscription.unsubscribe(); window.removeEventListener('online', on); window.removeEventListener('offline', off) }
   }, [])
   useEffect(() => {
     if (!sesion) return setPerfil(null)
-    supabase.from('profiles').select('*').eq('id', sesion.user.id).single().then(({ data }) => setPerfil(data))
+    supabase.from('profiles').select('*').eq('id', sesion.user.id).single().then(({ data }) => { if (data) { setPerfil(data); try { localStorage.setItem(PERFIL_KEY, JSON.stringify(data)) } catch { /* sin espacio */ } } else { const c = leerJSON(PERFIL_KEY); if (c && c.id === sesion.user.id) setPerfil(c) } })
   }, [sesion])
   useEffect(() => { const c = () => { setCuenta(false); setMas(false) }; window.addEventListener('click', c); return () => window.removeEventListener('click', c) }, [])
   useEffect(() => { ACTOR = perfil }, [perfil])
   const abrir = id => { setInicio({ id }); setVista('docs') }
+  useEffect(() => {
+    if (!perfil) return
+    const contar = async () => setPendCampo((await idbTodos()).length), h = () => contar(), on = () => sincronizarReportes()
+    contar(); refrescarCat(); sincronizarReportes()
+    const t = setInterval(() => { sincronizarReportes(); contar() }, 45000)
+    window.addEventListener('geoteca-reportes', h); window.addEventListener('online', on)
+    return () => { clearInterval(t); window.removeEventListener('geoteca-reportes', h); window.removeEventListener('online', on) }
+  }, [perfil])
+  useEffect(() => { if (offline) setVista('campo') }, [offline])
   useEffect(() => { if (!perfil?.activo) return; const c = t => supabase.from(t).select('id', { count: 'exact', head: true }).eq('user_id', perfil.id).eq('estado', 'pendiente'); Promise.all([c('aprobaciones'), c('firmas_firmantes')]).then(([x, y]) => { setPend((x.count || 0) + (y.count || 0)); setPendF(y.count || 0) }) }, [perfil, vista])
   if (sesion === undefined) return null
   if (recuperar) return <NuevaClave onListo={() => setRecuperar(false)} />
@@ -1378,6 +1631,7 @@ function Principal() {
       <header className="top"><Logo />
         <input className="search" placeholder="Buscar en la unidad" value={q} onChange={e => { setQ(e.target.value); setVista('docs') }} />
         <button className={'tab' + (vista === 'docs' ? ' on' : '')} onClick={() => setVista('docs')}>Archivos</button>
+        <button className={'tab' + (vista === 'campo' ? ' on' : '')} onClick={() => setVista('campo')}>Campo{pendCampo ? ` (${pendCampo})` : ''}</button>
         {GRUPOS.map(g => <div key={g.t} className="masw"><button className={'tab' + (g.items.some(([k]) => k === vista) ? ' on' : '')} onClick={e => { e.stopPropagation(); setMas(mas === g.t ? false : g.t) }}>{g.t} ▾</button>
           {mas === g.t && <div className="ctx mas" onClick={e => e.stopPropagation()}>{g.items.map(([k, t]) => <button key={k} onClick={() => { setVista(k); setMas(false) }}>{t}</button>)}</div>}</div>)}
         <button className={'tab' + (vista === 'links' ? ' on' : '')} onClick={() => setVista('links')}>Accesos</button>
@@ -1392,7 +1646,8 @@ function Principal() {
         <div className="avw"><button className="av" title="Mi cuenta" onClick={e => { e.stopPropagation(); setCuenta(!cuenta) }}>{(perfil.nombre || perfil.email || '?')[0].toUpperCase()}</button>
           {cuenta && <MiCuenta perfil={perfil} onNombre={n => setPerfil({ ...perfil, nombre: n })} />}</div>
       </header>
-      {vista === 'docs' ? <Drive perfil={perfil} q={q} inicio={inicio} irVista={setVista} /> : vista === 'proy' ? <Proyectos perfil={perfil} onAbrir={abrir} /> : vista === 'equipos' ? <Equipos perfil={perfil} /> : vista === 'tareas' ? <Tareas perfil={perfil} /> : vista === 'opor' ? <Oportunidades perfil={perfil} /> : vista === 'hab' ? <Habilitantes perfil={perfil} /> : vista === 'firmas' ? <Firmas perfil={perfil} /> : vista === 'pqrs' ? <Pqrs perfil={perfil} /> : vista === 'apr' ? <MisAprobaciones perfil={perfil} /> : vista === 'ind' ? <Indicadores perfil={perfil} /> : vista === 'fav' ? <Destacados onAbrir={abrir} /> : vista === 'links' ? <Accesos perfil={perfil} /> : vista === 'trash' ? <Papelera perfil={perfil} /> : vista === 'log' ? <Actividad /> : <Usuarios perfil={perfil} />}
+      {offline && <div className="banner">Sin conexión: tus reportes de campo se guardan en el celular y se envían solos cuando vuelva el internet.</div>}
+      {vista === 'campo' ? <Campo perfil={perfil} /> : offline ? <SinConexion onCampo={() => setVista('campo')} /> : vista === 'docs' ? <Drive perfil={perfil} q={q} inicio={inicio} irVista={setVista} /> : vista === 'proy' ? <Proyectos perfil={perfil} onAbrir={abrir} /> : vista === 'equipos' ? <Equipos perfil={perfil} /> : vista === 'tareas' ? <Tareas perfil={perfil} /> : vista === 'opor' ? <Oportunidades perfil={perfil} /> : vista === 'hab' ? <Habilitantes perfil={perfil} /> : vista === 'firmas' ? <Firmas perfil={perfil} /> : vista === 'pqrs' ? <Pqrs perfil={perfil} /> : vista === 'apr' ? <MisAprobaciones perfil={perfil} /> : vista === 'ind' ? <Indicadores perfil={perfil} /> : vista === 'fav' ? <Destacados onAbrir={abrir} /> : vista === 'links' ? <Accesos perfil={perfil} /> : vista === 'trash' ? <Papelera perfil={perfil} /> : vista === 'log' ? <Actividad /> : <Usuarios perfil={perfil} />}
     </div>
   )
 }
