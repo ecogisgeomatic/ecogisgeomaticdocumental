@@ -26,6 +26,22 @@ Deno.serve(async (req) => {
     if (!p.fecha_fin_prevista) continue
     const d = dias(p.fecha_fin_prevista); if (toca(d)) filas.push({ tipo: 'Proyecto', item: `${p.codigo ?? ''} ${p.nombre}`.trim(), que: 'Entrega prevista', fecha: p.fecha_fin_prevista, d })
   }
+  const { data: hb } = await db.from('habilitantes').select('*').not('fecha_vence', 'is', null)
+  for (const h of hb ?? []) { const d = dias(h.fecha_vence); if (toca(d)) filas.push({ tipo: 'Habilitante', item: h.nombre, que: 'Vence el documento', fecha: h.fecha_vence, d }) }
+  const { data: op } = await db.from('oportunidades').select('*').in('estado', ['identificada', 'evaluando', 'preparando']).not('fecha_cierre', 'is', null)
+  for (const o of op ?? []) { const d = dias(o.fecha_cierre); if (toca(d)) filas.push({ tipo: 'Oportunidad', item: `${o.entidad ?? ''} · ${o.objeto}`.slice(0, 90), que: 'Cierra el proceso', fecha: o.fecha_cierre, d }) }
+  const { data: ta } = await db.from('tareas').select('*').neq('estado', 'hecha').not('fecha_fin', 'is', null)
+  for (const k of ta ?? []) { const d = dias(k.fecha_fin); if (toca(d)) filas.push({ tipo: 'Tarea', item: k.titulo, que: 'Fecha límite', fecha: k.fecha_fin, d }) }
+  const { data: pq } = await db.from('pqrs').select('*').in('estado', ['recibida', 'en_tramite'])
+  for (const k of pq ?? []) {
+    const d = dias(k.fecha_limite), nueva = Date.now() - new Date(k.created_at).getTime() < 30 * 3600e3
+    if (nueva || d <= 5) filas.push({ tipo: 'PQRS', item: `${k.radicado} · ${k.asunto}`.slice(0, 90), que: nueva ? 'Nueva solicitud' : 'Plazo de respuesta', fecha: k.fecha_limite, d })
+  }
+  const { data: dc } = await db.from('documents').select('nombre,vence_at,proxima_revision').is('deleted_at', null).or('vence_at.not.is.null,proxima_revision.not.is.null')
+  for (const x of dc ?? []) {
+    if (x.vence_at) { const d = dias(x.vence_at); if (toca(d)) filas.push({ tipo: 'Documento', item: x.nombre, que: 'Vence el documento', fecha: x.vence_at, d }) }
+    if (x.proxima_revision) { const d = dias(x.proxima_revision); if (toca(d)) filas.push({ tipo: 'Documento', item: x.nombre, que: 'Revisión periódica', fecha: x.proxima_revision, d }) }
+  }
   if (!filas.length) return Response.json({ enviado: false, motivo: 'Nada por avisar hoy' })
   filas.sort((a, b) => a.d - b.d)
 
@@ -36,16 +52,16 @@ Deno.serve(async (req) => {
   }
   const estado = (d: number) => (d < 0 ? `<b style="color:#d32f2f">Vencido hace ${-d} d</b>` : d === 0 ? '<b style="color:#d32f2f">Vence hoy</b>' : `<b style="color:${d <= 7 ? '#e37400' : '#374845'}">En ${d} días</b>`)
   const html = `<div style="font-family:Trebuchet MS,Arial,sans-serif;color:#374845">
-    <h2 style="color:#2a2aff">Geoteca Ecogis · Vencimientos por atender</h2>
+    <h2 style="color:#2a2aff">Gerencia Ecogis Geomatic · Vencimientos por atender</h2>
     <table cellpadding="8" style="border-collapse:collapse;width:100%">
     <tr style="background:#2a2aff;color:#fff;text-align:left"><th>Tipo</th><th>Elemento</th><th>Qué</th><th>Fecha</th><th>Estado</th></tr>
     ${filas.map((f) => `<tr style="border-bottom:1px solid #dbe3e4"><td>${f.tipo}</td><td>${esc(f.item)}</td><td>${f.que}</td><td>${f.fecha}</td><td>${estado(f.d)}</td></tr>`).join('')}
-    </table><p style="color:#6b7c79;font-size:12px">Aviso automático de Geoteca Ecogis. Actualiza las fechas en la pestaña Equipos o Proyectos.</p></div>`
+    </table><p style="color:#6b7c79;font-size:12px">Aviso automático de Gerencia Ecogis Geomatic. Actualiza las fechas en la pestaña Equipos o Proyectos.</p></div>`
 
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${Deno.env.get('RESEND_API_KEY')}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: Deno.env.get('ALERT_FROM') ?? 'Geoteca Ecogis <onboarding@resend.dev>', to: para, subject: `Geoteca Ecogis: ${filas.length} vencimiento(s) por atender`, html }),
+    body: JSON.stringify({ from: Deno.env.get('ALERT_FROM') ?? 'Gerencia Ecogis Geomatic <onboarding@resend.dev>', to: para, subject: `Gerencia Ecogis Geomatic: ${filas.length} vencimiento(s) por atender`, html }),
   })
   return Response.json({ enviado: r.ok, estado: r.status, items: filas.length, destinatarios: para.length, detalle: r.ok ? undefined : await r.text() })
 })
