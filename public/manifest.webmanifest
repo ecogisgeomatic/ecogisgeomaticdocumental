@@ -1,7 +1,7 @@
 {
-  "name": "Geoteca Ecogis · Centro documental",
-  "short_name": "Geoteca Ecogis",
-  "description": "Gestor documental de Ecogis Geomatic S.A.S.",
+  "name": "Gerencia Ecogis Geomatic",
+  "short_name": "Gerencia Ecogis",
+  "description": "Gestión documental y operativa de Ecogis Geomatic S.A.S.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
