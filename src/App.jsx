@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from './supabase'
 import logo from './logo.svg'
 
-const APP = 'Geoteca Ecogis'
+const APP = 'Gerencia Ecogis Geomatic'
 let ACTOR = null
 const registrar = (accion, detalle) => { if (ACTOR) supabase.from('activity').insert({ user_id: ACTOR.id, user_nombre: ACTOR.nombre || ACTOR.email, accion, detalle }).then(() => {}) }
 const SUB_PROYECTO = ['01_Contrato-y-Propuesta', '02_Planeacion', '03_Captura-de-Campo', '04_Procesamiento-y-Analisis', '05_Control-de-Calidad', '06_Entregables', '07_Cierre-y-Evaluacion']
@@ -116,11 +116,11 @@ const pdfBuilder = async () => {
   const pdf = await PDFDocument.create(), font = await pdf.embedFont(StandardFonts.Helvetica), bold = await pdf.embedFont(StandardFonts.HelveticaBold)
   const W = 595, H = 842, m = 50, c = rgb(0.22, 0.28, 0.27), az = rgb(0.16, 0.16, 1), st = { page: pdf.addPage([W, H]), y: H - 60 }
   const nueva = () => { st.page = pdf.addPage([W, H]); st.y = H - 60 }
-  const limp = x => String(x ?? '').replace(/[^\x20-\x7E\xA0-\xFF]/g, '?')
+  const limpio = x => String(x ?? '').replace(/[^\x20-\x7E\xA0-\xFF]/g, '?')
   const lineas = (txt, f, size, ancho) => { const out = []; for (const par of txt.split('\n')) { let l = ''; for (const w of par.split(' ')) { const t2 = l ? l + ' ' + w : w; if (f.widthOfTextAtSize(t2, size) > ancho && l) { out.push(l); l = w } else l = t2 } out.push(l) } return out }
-  const t = (txt, o = {}) => { const f = o.bold ? bold : font, size = o.size || 10; for (const ln of lineas(limp(txt), f, size, W - 2 * m - (o.x || 0))) { if (st.y < 60) nueva(); st.page.drawText(ln, { x: m + (o.x || 0), y: st.y, size, font: f, color: o.color || c }); st.y -= size + 4 } st.y -= o.dy ?? 2 }
+  const t = (txt, o = {}) => { const f = o.bold ? bold : font, size = o.size || 10; for (const ln of lineas(limpio(txt), f, size, W - 2 * m - (o.x || 0))) { if (st.y < 60) nueva(); st.page.drawText(ln, { x: m + (o.x || 0), y: st.y, size, font: f, color: o.color || c }); st.y -= size + 4 } st.y -= o.dy ?? 2 }
   const h = txt => { st.y -= 8; t(txt, { bold: true, size: 12, color: az, dy: 4 }) }
-  return { pdf, st, t, h, nueva, m, rgb, font, c, limpio: limp }
+  return { pdf, st, t, h, nueva, m, rgb, font, c, limpio }
 }
 const altaDoc = async ({ carpeta, prefijo, blob, nombre, tipo, categoria, uid, unombre, extra = {} }) => {
   const path = `${carpeta || 'raiz'}/${prefijo}-${nombre.replace(/[^\w.\-]/g, '_')}`
@@ -213,7 +213,26 @@ const generarActa = async (p, perfil) => {
 }
 const FileIcon = ({ n }) => <div className="fi" style={{ background: COL[ext(n)] || '#546e7a' }}>{ext(n).slice(0, 4) || 'file'}</div>
 const FolderIcon = ({ c }) => <svg width="46" height="46" viewBox="0 0 24 24" fill={c || '#374845'}><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z" /></svg>
-const Logo = ({ h = 40 }) => <div className="logo"><img src={logo} alt="Ecogis Geomatic SAS" height={h} /><span className="appn">{APP}</span></div>
+const Logo = ({ h = 40, sub = true }) => <div className="logo"><img src={logo} alt="Ecogis Geomatic SAS" height={h} />{sub && <span className="appn">Gerencia</span>}</div>
+const ICONOS = { home: 'M3 11l9-8 9 8M5 10v10h14V10', folder: 'M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z', star: 'M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z', trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13', target: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z', shield: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z', briefcase: 'M3 8h18v11H3zM9 8V5h6v3', list: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01', pin: 'M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11zM12 7.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z', chat: 'M4 5h16v11H9l-5 4z', gps: 'M12 3v4M12 17v4M3 12h4M17 12h4M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', okc: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM8 12l3 3 5-6', pen: 'M4 20l4-1 11-11-3-3L5 16zM14 6l3 3', link: 'M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1', chart: 'M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6', clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2', users: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2 20c0-3.5 3-6 7-6s7 2.5 7 6M17 5a3 3 0 0 1 0 6M18 14c2.5.5 4 2.5 4 6', download: 'M12 4v11M7 11l5 5 5-5M4 20h16', search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4', menu: 'M4 6h16M4 12h16M4 18h16', lock: 'M6 11h12v9H6zM9 11V8a3 3 0 0 1 6 0v3' }
+const Ico = ({ n, size = 18 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={ICONOS[n]} /></svg>
+const NAV = [
+  { t: null, items: [['inicio', 'Inicio', 'home']] },
+  { t: 'Documentos', items: [['docs', 'Archivos', 'folder'], ['fav', 'Destacados', 'star'], ['trash', 'Papelera', 'trash']] },
+  { t: 'Misional', items: [['opor', 'Oportunidades', 'target'], ['hab', 'Documentos habilitantes', 'shield'], ['proy', 'Proyectos', 'briefcase'], ['tareas', 'Tareas y cronograma', 'list'], ['campo', 'Reportes de campo', 'pin'], ['pqrs', 'PQRS', 'chat', true]] },
+  { t: 'Apoyo', items: [['equipos', 'Equipos y reservas', 'gps'], ['apr', 'Aprobaciones', 'okc'], ['firmas', 'Firmas electrónicas', 'pen'], ['links', 'Accesos rápidos', 'link']] },
+  { t: 'Evaluación', items: [['ind', 'Indicadores', 'chart'], ['log', 'Actividad', 'clock', true]] },
+  { t: 'Administración', admin: true, items: [['users', 'Usuarios y áreas', 'users'], ['resp', 'Respaldo', 'download']] }
+]
+const urlAvatar = p => (p ? supabase.storage.from('avatares').getPublicUrl(p).data.publicUrl : null)
+const Avatar = ({ u, size = 32 }) => u?.avatar ? <img className="avimg" src={urlAvatar(u.avatar)} alt="" width={size} height={size} /> : <span className="avini" style={{ width: size, height: size, fontSize: size * 0.42 }}>{((u?.nombre || u?.email || '?')[0] || '?').toUpperCase()}</span>
+const recortarCuadrado = (file, px = 256) => new Promise(ok => { const img = new Image(); img.onload = () => { const l = Math.min(img.width, img.height), c = document.createElement('canvas'); c.width = c.height = px; c.getContext('2d').drawImage(img, (img.width - l) / 2, (img.height - l) / 2, l, l, 0, 0, px, px); c.toBlob(b => ok(b), 'image/jpeg', 0.85); URL.revokeObjectURL(img.src) }; img.src = URL.createObjectURL(file) })
+const sumarMeses = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setMonth(d.getMonth() + n); return d.toISOString().slice(0, 10) }
+const payloadDoc = (f, d) => {
+  const { revisado, ...r } = f, n = r.revision_meses === '' || r.revision_meses == null ? null : Number(r.revision_meses)
+  return { ...r, etiquetas: r.etiquetas.split(',').map(x => x.trim().toLowerCase()).filter(Boolean), vence_at: r.vence_at || null, revision_meses: n,
+    proxima_revision: n ? (revisado || !d.proxima_revision || d.revision_meses !== n ? sumarMeses(hoyStr(), n) : d.proxima_revision) : null }
+}
 
 function Mapa({ url, ext }) {
   const ref = useRef(), [msg, setMsg] = useState('Cargando mapa…'), [info, setInfo] = useState('')
@@ -340,15 +359,141 @@ function Auth() {
       : await supabase.auth.signUp({ email: f.email, password: f.pass, options: { data: { nombre: f.nombre } } })
     if (error) setMsg(error.message)
   }
+  const olvide = async e => {
+    e.preventDefault(); if (!f.email) return setMsg('Escribe tu correo arriba y vuelve a pulsar aquí.')
+    const { error } = await supabase.auth.resetPasswordForEmail(f.email, { redirectTo: window.location.origin }); setMsg(error ? error.message : 'Te enviamos un enlace para crear una contraseña nueva. Revisa tu correo.')
+  }
   return (
-    <div className="auth"><form onSubmit={enviar} className="auth-box"><Logo /><p className="muted">Centro documental de Ecogis Geomatic</p>
-      {modo === 'up' && <input placeholder="Nombre completo" required value={f.nombre} onChange={set('nombre')} />}
-      <input type="email" placeholder="Correo" required value={f.email} onChange={set('email')} />
-      <input type="password" placeholder="Contraseña (mínimo 6)" minLength={6} required value={f.pass} onChange={set('pass')} />
-      <button className="btn">{modo === 'in' ? 'Ingresar' : 'Crear cuenta'}</button>{msg && <p className="msg">{msg}</p>}
-      <a href="#" onClick={e => { e.preventDefault(); setModo(modo === 'in' ? 'up' : 'in'); setMsg('') }}>{modo === 'in' ? 'Crear una cuenta nueva' : 'Ya tengo cuenta'}</a>
-      {modo === 'in' && <a href="#" onClick={async e => { e.preventDefault(); if (!f.email) return setMsg('Escribe tu correo arriba y vuelve a pulsar aquí.'); const { error } = await supabase.auth.resetPasswordForEmail(f.email, { redirectTo: window.location.origin }); setMsg(error ? error.message : 'Te enviamos un enlace para crear una contraseña nueva. Revisa tu correo.') }}>¿Olvidaste tu contraseña?</a>}
-    </form></div>
+    <div className="login">
+      <div className="login-hero"><img className="login-logo" src="/logo-blanco.svg" alt="Ecogis Geomatic" />
+        <div><h1>Gerencia Ecogis Geomatic</h1><p>Soluciones geomáticas precisas para decidir mejor sobre el territorio.</p></div><small>Ecogis Geomatic S.A.S.</small></div>
+      <div className="login-form"><form onSubmit={enviar}>
+        <h2>{modo === 'in' ? 'Ingresar' : 'Crear cuenta'}</h2><p className="muted">{modo === 'in' ? 'Usa tu correo y tu contraseña.' : 'Un administrador activará tu acceso.'}</p>
+        {modo === 'up' && <input placeholder="Nombre completo" required value={f.nombre} onChange={set('nombre')} />}
+        <input type="email" placeholder="Correo" required value={f.email} onChange={set('email')} />
+        <input type="password" placeholder="Contraseña (mínimo 6)" minLength={6} required value={f.pass} onChange={set('pass')} />
+        <button className="btn">{modo === 'in' ? 'Ingresar' : 'Crear cuenta'}</button>{msg && <p className="msg">{msg}</p>}
+        <a href="#" onClick={e => { e.preventDefault(); setModo(modo === 'in' ? 'up' : 'in'); setMsg('') }}>{modo === 'in' ? 'Crear una cuenta nueva' : 'Ya tengo cuenta'}</a>
+        {modo === 'in' && <a href="#" onClick={olvide}>¿Olvidaste tu contraseña?</a>}
+      </form></div>
+    </div>
+  )
+}
+
+function MfaCodigo({ onListo }) {
+  const [c, setC] = useState(''), [msg, setMsg] = useState(''), [env, setEnv] = useState(false)
+  const verificar = async e => {
+    e.preventDefault(); setEnv(true); setMsg('')
+    const { data: fs } = await supabase.auth.mfa.listFactors(), fac = fs?.totp?.[0]
+    if (!fac) { setEnv(false); return setMsg('No se encontró el factor de verificación.') }
+    const { data: ch, error: e1 } = await supabase.auth.mfa.challenge({ factorId: fac.id }); if (e1) { setEnv(false); return setMsg(e1.message) }
+    const { error } = await supabase.auth.mfa.verify({ factorId: fac.id, challengeId: ch.id, code: c.trim() })
+    if (error) { setEnv(false); return setMsg('Código incorrecto. Revisa la hora de tu celular e intenta de nuevo.') }
+    onListo()
+  }
+  return <div className="auth"><form onSubmit={verificar} className="auth-box"><Logo sub={false} /><h2>Verificación en dos pasos</h2><p className="muted">Escribe el código de 6 números que muestra tu aplicación de autenticación.</p>
+    <input inputMode="numeric" maxLength={6} autoFocus value={c} onChange={e => setC(e.target.value.replace(/\D/g, ''))} /><button className="btn" disabled={env || c.length !== 6}>Verificar</button>{msg && <p className="msg">{msg}</p>}
+    <a href="#" onClick={e => { e.preventDefault(); supabase.auth.signOut() }}>Salir</a></form></div>
+}
+
+function MfaActivar({ onClose }) {
+  const [est, setEst] = useState('cargando'), [d, setD] = useState(null), [fid, setFid] = useState(null), [c, setC] = useState(''), [msg, setMsg] = useState('')
+  useEffect(() => {
+    (async () => {
+      const { data: fs } = await supabase.auth.mfa.listFactors(), ver = fs?.totp?.[0]
+      if (ver) { setFid(ver.id); return setEst('activo') }
+      for (const x of fs?.all || []) if (x.status === 'unverified') await supabase.auth.mfa.unenroll({ factorId: x.id })
+      const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Celular ' + hoyStr() })
+      if (error) { setMsg(error.message); return setEst('error') }
+      setD(data); setFid(data.id); setEst('nuevo')
+    })()
+  }, [])
+  const confirmar = async () => {
+    const { data: ch, error: e1 } = await supabase.auth.mfa.challenge({ factorId: fid }); if (e1) return setMsg(e1.message)
+    const { error } = await supabase.auth.mfa.verify({ factorId: fid, challengeId: ch.id, code: c.trim() }); if (error) return setMsg('Código incorrecto. Intenta de nuevo.')
+    registrar('Activó la verificación en dos pasos', ''); setEst('listo')
+  }
+  const quitar = async () => {
+    if (!confirm('¿Desactivar la verificación en dos pasos? Tu cuenta quedará protegida solo por la contraseña.')) return
+    const { error } = await supabase.auth.mfa.unenroll({ factorId: fid }); if (error) return setMsg(error.message)
+    registrar('Desactivó la verificación en dos pasos', ''); setEst('quitado')
+  }
+  return (
+    <div className="modal" onClick={onClose}><div className="dlg" onClick={e => e.stopPropagation()}>
+      <h3>Verificación en dos pasos</h3>
+      {est === 'cargando' && <p className="muted">Preparando…</p>}
+      {est === 'nuevo' && <><p className="muted">1. Instala Google Authenticator o Microsoft Authenticator en tu celular. 2. Escanea este código QR. 3. Escribe el código de 6 números que aparece.</p>
+        <div style={{ textAlign: 'center' }}><img src={d.totp.qr_code} alt="Código QR" width={190} height={190} /><small>¿No puedes escanear? Escribe esta clave: <b>{d.totp.secret}</b></small></div>
+        <div className="lnk"><input inputMode="numeric" maxLength={6} placeholder="Código de 6 números" value={c} onChange={e => setC(e.target.value.replace(/\D/g, ''))} /><button className="btn" disabled={c.length !== 6} onClick={confirmar}>Activar</button></div></>}
+      {est === 'listo' && <p><b>Listo.</b> Desde ahora, al ingresar se te pedirá el código de tu aplicación. Si cambias de celular o lo pierdes, un administrador debe quitarte el factor desde el panel de Supabase.</p>}
+      {est === 'activo' && <><p>La verificación en dos pasos está <b>activa</b> en tu cuenta.</p><button className="chip no" onClick={quitar}>Desactivar</button></>}
+      {est === 'quitado' && <p>Verificación en dos pasos desactivada.</p>}
+      {msg && <p className="msg">{msg}</p>}
+      <div className="dact"><button className="btn" onClick={onClose}>Cerrar</button></div>
+    </div></div>
+  )
+}
+
+function Inicio({ perfil, ir, pend, pendF, pendCampo }) {
+  const admin = perfil.rol === 'admin'
+  const [d, setD] = useState({ tareas: [], venc: [], proy: [], opor: [], pq: 0, act: [] })
+  useEffect(() => {
+    (async () => {
+      const f30 = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10), q = (t, fn) => fn(supabase.from(t)).then(r => r.data || [])
+      const [tareas, eq, hb, dc, proy, opor, pq, act] = await Promise.all([
+        q('tareas', t => t.select('id,titulo,fecha_fin').eq('responsable', perfil.id).neq('estado', 'hecha')),
+        q('equipos', t => t.select('nombre,codigo,proxima_calibracion,proximo_mantenimiento,vence_seguro').neq('estado', 'baja')),
+        q('habilitantes', t => t.select('nombre,fecha_vence').not('fecha_vence', 'is', null)),
+        q('documents', t => t.select('nombre,vence_at,proxima_revision').is('deleted_at', null).or(`vence_at.lte.${f30},proxima_revision.lte.${f30}`)),
+        q('proyectos', t => t.select('id,codigo,nombre,cliente,fecha_fin_prevista').eq('estado', 'ejecucion').order('fecha_fin_prevista', { nullsFirst: false })),
+        q('oportunidades', t => t.select('id,entidad,objeto,fecha_cierre').in('estado', ['identificada', 'evaluando', 'preparando']).order('fecha_cierre', { nullsFirst: false })),
+        admin ? q('pqrs', t => t.select('id').in('estado', ['recibida', 'en_tramite'])) : Promise.resolve([]),
+        admin ? q('activity', t => t.select('*').order('created_at', { ascending: false }).limit(8)) : Promise.resolve([])
+      ])
+      const venc = []
+      eq.forEach(e => [['proxima_calibracion', 'Calibración'], ['proximo_mantenimiento', 'Mantenimiento'], ['vence_seguro', 'Seguro o licencia']].forEach(([k, t]) => { if (e[k] && e[k] <= f30) venc.push({ f: e[k], t: `${t}: ${e.codigo ? e.codigo + ' · ' : ''}${e.nombre}` }) }))
+      hb.forEach(h => { if (h.fecha_vence <= f30) venc.push({ f: h.fecha_vence, t: `Habilitante: ${h.nombre}` }) })
+      dc.forEach(x => { if (x.vence_at && x.vence_at <= f30) venc.push({ f: x.vence_at, t: `Documento: ${x.nombre}` }); if (x.proxima_revision && x.proxima_revision <= f30) venc.push({ f: x.proxima_revision, t: `Revisión: ${x.nombre}` }) })
+      venc.sort((a, b) => a.f.localeCompare(b.f)); setD({ tareas, venc, proy, opor, pq: pq.length, act })
+    })()
+  }, [perfil.id, admin])
+  const h = new Date().getHours(), saludo = h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches', atras = d.tareas.filter(t => t.fecha_fin && t.fecha_fin < hoyStr()).length
+  const K = ({ k, n, t, sub }) => <button className="kpi" onClick={() => ir(k)}><b>{n}</b><span>{t}</span>{sub && <small>{sub}</small>}</button>
+  return (
+    <div className="page">
+      <div className="head"><div><h2>{saludo}, {(perfil.nombre || '').split(' ')[0] || 'bienvenido'}</h2><p className="muted">{new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p></div></div>
+      <div className="kpis"><K k="tareas" n={d.tareas.length} t="Tareas abiertas" sub={atras ? `${atras} atrasada(s)` : 'Al día'} /><K k="apr" n={pend - pendF} t="Aprobaciones pendientes" /><K k="firmas" n={pendF} t="Firmas pendientes" /><K k="campo" n={pendCampo} t="Reportes sin enviar" />{admin && <K k="pqrs" n={d.pq} t="PQRS por responder" />}</div>
+      <div className="cols2">
+        <section className="card"><h3>Vencimientos en los próximos 30 días</h3>{!d.venc.length ? <p className="muted">No hay nada por vencer.</p> : d.venc.slice(0, 10).map((v, i) => { const [c, tx] = semaforo(v.f); return <div key={i} className="fila"><span>{v.t}</span><span className={'sem ' + c}>{tx}</span></div> })}</section>
+        <section className="card"><h3>Proyectos en ejecución ({d.proy.length})</h3>{!d.proy.length ? <p className="muted">No hay proyectos en ejecución.</p> : d.proy.slice(0, 6).map(p => <div key={p.id} className="fila"><span><b>{p.codigo}</b> · {p.nombre}<small>{p.cliente}</small></span><span className="muted">{p.fecha_fin_prevista ? fecha(p.fecha_fin_prevista) : ''}</span></div>)}<button className="btn ghost" style={{ marginTop: 10 }} onClick={() => ir('proy')}>Ver proyectos</button></section>
+        <section className="card"><h3>Oportunidades abiertas ({d.opor.length})</h3>{!d.opor.length ? <p className="muted">No hay oportunidades abiertas.</p> : d.opor.slice(0, 6).map(o => { const [c, tx] = semaforo(o.fecha_cierre); return <div key={o.id} className="fila"><span>{o.entidad || 'Sin entidad'}<small>{(o.objeto || '').slice(0, 70)}</small></span>{o.fecha_cierre && <span className={'sem ' + c}>{tx}</span>}</div> })}<button className="btn ghost" style={{ marginTop: 10 }} onClick={() => ir('opor')}>Ver oportunidades</button></section>
+        {admin && <section className="card"><h3>Actividad reciente</h3>{!d.act.length ? <p className="muted">Sin movimientos.</p> : d.act.map(a => <div key={a.id} className="fila"><span>{a.user_nombre} · {a.accion}<small>{a.detalle}</small></span><small>{new Date(a.created_at).toLocaleDateString('es-CO')}</small></div>)}</section>}
+      </div>
+    </div>
+  )
+}
+
+function Respaldo() {
+  const [msg, setMsg] = useState(''), [env, setEnv] = useState(false)
+  const bajar = async () => {
+    setEnv(true); setMsg('Reuniendo la información…')
+    const tablas = ['folders', 'documents', 'proyectos', 'tareas', 'equipos', 'equipo_eventos', 'reservas', 'habilitantes', 'oportunidades', 'reportes_campo', 'aprobaciones', 'firmas_solicitudes', 'pqrs', 'encuestas', 'eventos_sgi', 'links', 'grupos', 'grupo_miembros', 'profiles', 'activity']
+    try {
+      await cargarLib('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'XLSX'); const wb = window.XLSX.utils.book_new()
+      for (const t of tablas) {
+        const { data } = await supabase.from(t).select('*').limit(20000)
+        const filas = (data || []).map(r => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, typeof v === 'object' && v !== null ? JSON.stringify(v).slice(0, 3000) : v])))
+        window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(filas.length ? filas : [{ info: 'sin registros' }]), t.slice(0, 31))
+      }
+      window.XLSX.writeFile(wb, `Respaldo-Ecogis_${hoyStr().replaceAll('-', '')}.xlsx`); registrar('Descargó respaldo', ''); setMsg('Respaldo descargado.')
+    } catch (e) { setMsg('No se pudo generar el respaldo: ' + (e.message || e)) }
+    setEnv(false)
+  }
+  return (
+    <div className="panel solo"><div className="head"><div><h2>Respaldo</h2><p className="muted">Copia de la información de la página en un archivo de Excel.</p></div></div>
+      <p>Incluye carpetas, archivos (datos, no el contenido), proyectos, tareas, equipos, reservas, habilitantes, oportunidades, reportes de campo, aprobaciones, firmas, PQRS, usuarios y actividad.</p>
+      <p className="muted">No incluye el contenido de los archivos: para eso usa <b>Descargar como ZIP</b> en cada carpeta y revisa las copias automáticas que ofrece tu plan de Supabase. Se recomienda descargar este respaldo cada semana y guardarlo fuera de la página.</p>
+      <div className="lnk"><button className="btn" disabled={env} onClick={bajar}>{env ? 'Generando…' : 'Descargar respaldo (Excel)'}</button></div>{msg && <p className="msg ok">{msg}</p>}</div>
   )
 }
 
@@ -385,7 +530,7 @@ function Permisos({ f, onClose, onChange }) {
       <label className="chk"><input type="checkbox" checked={priv} onChange={alternar} /> Carpeta privada: solo las personas marcadas y los administradores</label>
       <p className="muted">Aplica también a todas sus subcarpetas y archivos.</p>
       {priv && <div className="plist">{miembros.map(u => <label key={u.id} className="prow chk"><input type="checkbox" checked={acc.includes(u.id)} onChange={e => dar(u, e.target.checked)} /> {u.nombre || u.email}</label>)}{!miembros.length && <p className="muted">Aún no hay miembros activos.</p>}</div>}
-      {priv && <><b>Grupos con acceso</b><div className="plist">{gs.map(g => <label key={g.id} className="prow chk"><input type="checkbox" checked={ga.includes(g.id)} onChange={e => darG(g, e.target.checked)} /> {g.nombre}</label>)}{!gs.length && <p className="muted">Crea grupos en Más → Usuarios.</p>}</div></>}
+      {priv && <><b>Áreas con acceso</b><div className="plist">{gs.map(g => <label key={g.id} className="prow chk"><input type="checkbox" checked={ga.includes(g.id)} onChange={e => darG(g, e.target.checked)} /> {g.nombre}</label>)}{!gs.length && <p className="muted">Crea áreas en Usuarios y áreas.</p>}</div></>}
       <div className="dact"><button className="btn" onClick={onClose}>Listo</button></div>
     </div></div>
   )
@@ -460,11 +605,11 @@ function Actividad() {
 }
 
 function Ficha({ d, onClose, onChange }) {
-  const [f, setF] = useState({ codigo: d.codigo || '', version: d.version || '1.0', estado: d.estado || 'vigente', categoria: d.categoria || 'Otro', etiquetas: (d.etiquetas || []).join(', ') })
+  const [f, setF] = useState({ codigo: d.codigo || '', version: d.version || '1.0', estado: d.estado || 'vigente', categoria: d.categoria || 'Otro', etiquetas: (d.etiquetas || []).join(', '), vence_at: d.vence_at || '', revision_meses: d.revision_meses ?? '', revisado: false })
   const [vs, setVs] = useState([]), [msg, setMsg] = useState('')
   useEffect(() => { supabase.from('document_versions').select('*').eq('document_id', d.id).order('created_at', { ascending: false }).then(({ data }) => setVs(data || [])) }, [d.id])
   const guardar = async () => {
-    const { error } = await supabase.from('documents').update({ ...f, etiquetas: f.etiquetas.split(',').map(x => x.trim().toLowerCase()).filter(Boolean) }).eq('id', d.id); if (error) return setMsg(error.message)
+    const { error } = await supabase.from('documents').update(payloadDoc(f, d)).eq('id', d.id); if (error) return setMsg(error.message)
     registrar('Actualizó propiedades', `${d.nombre} · v${f.version} · ${ESTADOS[f.estado]}`); onChange(); onClose()
   }
   const bajar = async v => { const u = await signed(v.path, v.nombre); if (u) { registrar('Descargó versión anterior', `${v.nombre} v${v.version}`); window.open(u, '_blank') } }
@@ -478,6 +623,8 @@ function Ficha({ d, onClose, onChange }) {
         <label>Estado<select value={f.estado} onChange={set('estado')}>{Object.entries(ESTADOS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
         <label>Tipo de documento<select value={f.categoria} onChange={set('categoria')}>{TIPOS.map(t => <option key={t}>{t}</option>)}</select></label>
       </div>
+      <div className="frm"><label>Vence el (si aplica)<input type="date" value={f.vence_at} onChange={set('vence_at')} /></label><label>Revisar cada (meses)<input type="number" min="1" max="60" placeholder="ej. 12" value={f.revision_meses} onChange={set('revision_meses')} /></label></div>
+      {f.revision_meses !== '' && <label className="chk"><input type="checkbox" checked={f.revisado} onChange={e => setF({ ...f, revisado: e.target.checked })} /> Lo revisé hoy: reiniciar la próxima revisión{d.proxima_revision ? ` (actual: ${d.proxima_revision})` : ''}</label>}
       <label className="et">Etiquetas (separadas por coma)<input placeholder="ej. catastro, valledupar, 2026" value={f.etiquetas} onChange={set('etiquetas')} /></label>
       {vs.length > 0 && <><b>Versiones anteriores</b>{vs.map(v => <div className="lnk" key={v.id}><span>v{v.version} · reemplazada el {fecha(v.created_at)} · {fmt(v.tamano)}</span><button className="btn ghost" onClick={() => bajar(v)}>Descargar</button></div>)}</>}
       {msg && <p className="msg">{msg}</p>}
@@ -502,7 +649,7 @@ function Comentarios({ tipo, id }) {
   const enviar = async () => { if (!t.trim() || !ACTOR) return; await supabase.from('comentarios').insert({ item_type: tipo, item_id: id, user_id: ACTOR.id, user_nombre: ACTOR.nombre || ACTOR.email, texto: t.trim() }); setT(''); cargar() }
   return (
     <div className="coms"><b>Comentarios</b>
-      {l.map(c => <div key={c.id} className="com"><small>{c.user_nombre} · {new Date(c.created_at).toLocaleString('es-CO')}{(ACTOR?.rol === 'admin' || ACTOR?.id === c.user_id) && <button className="x2" title="Borrar" onClick={async () => { await supabase.from('comentarios').delete().eq('id', c.id); cargar() }}>✕</button>}</small><p>{c.texto}</p></div>)}
+      {l.map(c => <div key={c.id} className="com"><small>{c.user_nombre} · {new Date(c.created_at).toLocaleString('es-CO')}{(ACTOR?.rol === 'admin' || ACTOR?.id === c.user_id) && <button className="x2" title="Borrar" onClick={async () => { await supabase.from('comentarios').delete().eq('id', c.id); cargar() }}>×</button>}</small><p>{c.texto}</p></div>)}
       <div className="lnk"><input placeholder="Escribe un comentario…" value={t} onChange={e => setT(e.target.value)} onKeyDown={e => e.key === 'Enter' && enviar()} /><button className="btn" onClick={enviar}>Enviar</button></div>
     </div>
   )
@@ -568,7 +715,7 @@ function Proyectos({ perfil, onAbrir }) {
   return (
     <div className="panel solo">
       <div className="head"><div><h2>Proyectos</h2><p className="muted">Tablero por estado. Haz clic en un proyecto para ver su ficha.</p></div>
-        <div className="lnk"><button className="btn" onClick={nuevo}>＋ Nuevo proyecto</button>{admin && <button className="btn ghost" onClick={sincronizar}>Sincronizar con carpetas</button>}</div></div>
+        <div className="lnk"><button className="btn" onClick={nuevo}>+ Nuevo proyecto</button>{admin && <button className="btn ghost" onClick={sincronizar}>Sincronizar con carpetas</button>}</div></div>
       {msg && <p className="msg ok">{msg}</p>}
       <div className="kan">{Object.entries(EST_P).map(([k, t]) => <div key={k} className="col"><b>{t} <span className="muted">({l.filter(p => p.estado === k).length})</span></b>
         {l.filter(p => p.estado === k).map(p => <div key={p.id} className="pc" onClick={() => setSel(p)}><b>{p.codigo}</b> · {p.nombre}<small>{p.cliente}{p.responsable ? ' · ' + p.responsable : ''}</small>
@@ -637,7 +784,7 @@ function Equipos({ perfil }) {
   return (
     <div className="panel solo">
       <div className="head"><div><h2>Equipos</h2><p className="muted">GNSS, estaciones totales, drones y demás activos, con sus vencimientos de calibración, mantenimiento y seguro.</p></div>
-        {admin && <button className="btn" onClick={() => setSel({})}>＋ Nuevo equipo</button>}</div>
+        {admin && <button className="btn" onClick={() => setSel({})}>+ Nuevo equipo</button>}</div>
       {!l.length ? <div className="vacio">Aún no hay equipos registrados</div> : <div className="tabla-w"><table><thead><tr><th>Código</th><th>Equipo</th><th>Tipo</th><th>Responsable</th><th>Estado</th><th>Calibración</th><th>Mantenimiento</th><th>Seguro / licencia</th></tr></thead>
         <tbody>{l.map(e => <tr key={e.id} className="clic" onClick={() => setSel(e)}><td>{e.codigo}</td><td>{e.nombre}<small>{[e.marca, e.modelo].filter(Boolean).join(' ')}</small></td><td>{e.tipo}</td><td>{e.responsable}</td><td>{EST_EQ[e.estado]}</td>{cel(e.proxima_calibracion)}{cel(e.proximo_mantenimiento)}{cel(e.vence_seguro)}</tr>)}</tbody></table></div>}
       <Reservas perfil={perfil} equipos={l} />
@@ -681,7 +828,7 @@ function Indicadores({ perfil }) {
         <label>Fecha<input type="date" value={form.fecha} onChange={e => setForm({ ...form, fecha: e.target.value })} /></label>
         <label className="et2">Detalle<input value={form.detalle} onChange={e => setForm({ ...form, detalle: e.target.value })} /></label></div>
       <button className="btn" onClick={reg}>Registrar</button>
-      {admin && E.length > 0 && <><h3 className="gt">Últimos eventos</h3><div className="tabla-w"><table><tbody>{E.slice(0, 15).map(e => <tr key={e.id}><td>{fecha(e.fecha)}</td><td>{EV[e.tipo]}</td><td>{e.detalle}</td><td><button className="x2" title="Borrar" onClick={async () => { await supabase.from('eventos_sgi').delete().eq('id', e.id); cargar() }}>✕</button></td></tr>)}</tbody></table></div></>}
+      {admin && E.length > 0 && <><h3 className="gt">Últimos eventos</h3><div className="tabla-w"><table><tbody>{E.slice(0, 15).map(e => <tr key={e.id}><td>{fecha(e.fecha)}</td><td>{EV[e.tipo]}</td><td>{e.detalle}</td><td><button className="x2" title="Borrar" onClick={async () => { await supabase.from('eventos_sgi').delete().eq('id', e.id); cargar() }}>×</button></td></tr>)}</tbody></table></div></>}
     </div>
   )
 }
@@ -697,7 +844,7 @@ function Destacados({ onAbrir }) {
     })()
   }, [])
   return (
-    <div className="panel solo"><h2>⭐ Destacados</h2><p className="muted">Tus carpetas y archivos favoritos. Para destacar algo, clic derecho → Destacar.</p>
+    <div className="panel solo"><h2>Destacados</h2><p className="muted">Tus carpetas y archivos favoritos. Para destacar algo, clic derecho → Destacar.</p>
       {!fs.length && !ds.length ? <div className="vacio">Aún no has destacado nada</div> : <div className="grid">
         {fs.map(f => <div key={f.id} className="it" onClick={() => onAbrir(f.id)}><div className="ic"><FolderIcon c={f.color} /></div><div className="nm">{f.nombre}</div></div>)}
         {ds.map(d => <div key={d.id} className="it" onClick={() => setPrev(d)}><div className="ic"><FileIcon n={d.nombre} /></div><div className="nm">{d.nombre}</div></div>)}</div>}
@@ -807,7 +954,7 @@ function Tareas({ perfil }) {
   }
   return (
     <div className="panel solo">
-      <div className="head"><div><h2>Tareas y cronograma</h2><p className="muted">Quién hace qué y para cuándo.</p></div><button className="btn" onClick={() => setSel({})}>＋ Nueva tarea</button></div>
+      <div className="head"><div><h2>Tareas y cronograma</h2><p className="muted">Quién hace qué y para cuándo.</p></div><button className="btn" onClick={() => setSel({})}>+ Nueva tarea</button></div>
       <div className="bar2">
         <select value={fp} onChange={e => setFp(e.target.value)}><option value="">Todos los proyectos</option><option value="-">General</option>{ps.map(p => <option key={p.id} value={p.id}>{p.codigo} · {p.nombre}</option>)}</select>
         <select value={fr} onChange={e => setFr(e.target.value)}><option value="">Todas las personas</option><option value="yo">Solo mis tareas</option>{us.map(u => <option key={u.id} value={u.id}>{u.nombre || u.email}</option>)}</select>
@@ -815,7 +962,7 @@ function Tareas({ perfil }) {
         <div className="seg"><button className={modo === 'lista' ? 'on' : ''} onClick={() => setModo('lista')}>Lista</button><button className={modo === 'gantt' ? 'on' : ''} onClick={() => setModo('gantt')}>Cronograma</button></div>
       </div>
       {modo === 'gantt' ? gantt() : !v.length ? <div className="vacio">No hay tareas con estos filtros</div> : <div className="tabla-w"><table><thead><tr><th>Tarea</th><th>Proyecto</th><th>Responsable</th><th>Inicio</th><th>Fin</th><th>Prioridad</th><th>Estado</th></tr></thead>
-        <tbody>{v.map(t => <tr key={t.id}><td className={'clic' + (atras(t) ? ' rojo' : '')} onClick={() => setSel(t)}>{t.titulo}{atras(t) && ' ⚠'}</td><td>{pn(t.proyecto_id)}</td><td>{nom(us, t.responsable)}</td><td>{t.fecha_inicio ? fecha(t.fecha_inicio) : '—'}</td><td>{t.fecha_fin ? fecha(t.fecha_fin) : '—'}</td><td>{t.prioridad}</td>
+        <tbody>{v.map(t => <tr key={t.id}><td className={'clic' + (atras(t) ? ' rojo' : '')} onClick={() => setSel(t)}>{t.titulo}{atras(t) && ''}</td><td>{pn(t.proyecto_id)}</td><td>{nom(us, t.responsable)}</td><td>{t.fecha_inicio ? fecha(t.fecha_inicio) : '—'}</td><td>{t.fecha_fin ? fecha(t.fecha_fin) : '—'}</td><td>{t.prioridad}</td>
           <td><select value={t.estado} onChange={e => cambiar(t, e.target.value)}>{Object.entries(EST_T).map(([k, x]) => <option key={k} value={k}>{x}</option>)}</select></td></tr>)}</tbody></table></div>}
       {sel && <FichaTarea t={sel} ps={ps} us={us} perfil={perfil} onClose={() => setSel(null)} onChange={cargar} />}
     </div>
@@ -847,7 +994,7 @@ function Reservas({ perfil, equipos }) {
       <button className="btn" onClick={reservar}>Reservar</button>{msg && <p className="msg">{msg}</p>}
       {l.length > 0 && <div className="tabla-w"><table><thead><tr><th>Equipo</th><th>Quién</th><th>Desde</th><th>Hasta</th><th>Nota</th><th /></tr></thead>
         <tbody>{l.map(r => <tr key={r.id}><td>{en(r.equipo_id)}</td><td>{nom(us, r.user_id)}</td><td>{fecha(r.desde)}</td><td>{fecha(r.hasta)}</td><td>{r.nota}</td>
-          <td>{(perfil.rol === 'admin' || r.user_id === perfil.id) && <button className="x2" title="Cancelar reserva" onClick={async () => { await supabase.from('reservas').delete().eq('id', r.id); cargar() }}>✕</button>}</td></tr>)}</tbody></table></div>}
+          <td>{(perfil.rol === 'admin' || r.user_id === perfil.id) && <button className="x2" title="Cancelar reserva" onClick={async () => { await supabase.from('reservas').delete().eq('id', r.id); cargar() }}>×</button>}</td></tr>)}</tbody></table></div>}
     </div>
   )
 }
@@ -898,7 +1045,7 @@ function Oportunidades({ perfil }) {
   const abiertas = l.filter(o => ['identificada', 'evaluando', 'preparando'].includes(o.estado))
   return (
     <div className="panel solo">
-      <div className="head"><div><h2>Oportunidades</h2><p className="muted">Procesos que están siguiendo: {abiertas.length} abiertos · {plata(abiertas.reduce((a, o) => a + (Number(o.valor) || 0), 0))} en juego.</p></div><button className="btn" onClick={() => setSel({})}>＋ Nueva oportunidad</button></div>
+      <div className="head"><div><h2>Oportunidades</h2><p className="muted">Procesos que están siguiendo: {abiertas.length} abiertos · {plata(abiertas.reduce((a, o) => a + (Number(o.valor) || 0), 0))} en juego.</p></div><button className="btn" onClick={() => setSel({})}>+ Nueva oportunidad</button></div>
       <div className="kan">{Object.entries(EST_O).map(([k, t]) => <div key={k} className="col"><b>{t} <span className="muted">({l.filter(o => o.estado === k).length})</span></b>
         {l.filter(o => o.estado === k).map(o => { const [c, tx] = semaforo(o.fecha_cierre); return <div key={o.id} className="pc" onClick={() => setSel(o)}><b>{o.entidad || 'Sin entidad'}</b><small>{o.objeto}</small><small>{plata(o.valor)}</small>
           {o.fecha_cierre && ['identificada', 'evaluando', 'preparando'].includes(k) && <small><span className={'sem ' + c}>Cierra: {fecha(o.fecha_cierre)} · {tx}</span></small>}{o.responsable && <small>{nom(us, o.responsable)}</small>}</div> })}</div>)}</div>
@@ -927,7 +1074,7 @@ function FichaHab({ h, onClose, onChange }) {
         <label>Categoría<select value={f.categoria} onChange={set('categoria')}>{CAT_H.map(c => <option key={c}>{c}</option>)}</select></label><label>Fecha de expedición<input type="date" value={f.fecha_expedicion} onChange={set('fecha_expedicion')} /></label>
         <label>Vence<input type="date" value={f.fecha_vence} onChange={set('fecha_vence')} /></label></div>
       <label className="et">Observaciones<input value={f.observaciones} onChange={set('observaciones')} /></label>
-      <label className="et">Archivo vigente: {doc ? <b>{doc.nombre} <button className="x2" onClick={() => setDoc(null)}>✕ quitar</button></b> : 'ninguno'}<input placeholder="Busca el archivo por nombre…" value={q} onChange={e => buscar(e.target.value)} /></label>
+      <label className="et">Archivo vigente: {doc ? <b>{doc.nombre} <button className="x2" onClick={() => setDoc(null)}>× quitar</button></b> : 'ninguno'}<input placeholder="Busca el archivo por nombre…" value={q} onChange={e => buscar(e.target.value)} /></label>
       {res.map(r => <button key={r.id} className="nav small" onClick={() => { setDoc(r); setRes([]); setQ('') }}>{r.nombre}</button>)}
       {msg && <p className="msg">{msg}</p>}
       <div className="dact">{h.id && <button className="chip no" onClick={borrar}>Quitar</button>}<button className="btn ghost" onClick={onClose}>Cancelar</button><button className="btn" onClick={guardar}>Guardar</button></div>
@@ -948,7 +1095,7 @@ function Habilitantes({ perfil }) {
   const cuenta = c => l.filter(h => est(h)[0] === c).length
   return (
     <div className="panel solo">
-      <div className="head"><div><h2>Documentos habilitantes</h2><p className="muted">Lo que piden en las licitaciones, siempre vigente y a un clic.</p></div>{admin && <button className="btn" onClick={() => setSel({})}>＋ Agregar</button>}</div>
+      <div className="head"><div><h2>Documentos habilitantes</h2><p className="muted">Lo que piden en las licitaciones, siempre vigente y a un clic.</p></div>{admin && <button className="btn" onClick={() => setSel({})}>+ Agregar</button>}</div>
       <div className="hsum"><span className="sem verde">{cuenta('verde')} vigentes</span><span className="sem amar">{cuenta('amar')} por vencer o sin fecha</span><span className="sem rojo">{cuenta('rojo')} vencidos o sin archivo</span></div>
       {CAT_H.filter(c => l.some(h => h.categoria === c)).map(c => <div key={c}><h3 className="gt">{c}</h3><div className="tabla-w"><table><tbody>
         {l.filter(h => h.categoria === c).map(h => { const [cl, tx] = est(h); const d = ds[h.document_id]; return <tr key={h.id}><td className={admin ? 'clic' : ''} onClick={() => admin && setSel(h)}>{h.nombre}</td><td><span className={'sem ' + cl}>{tx}</span></td><td>{h.fecha_vence ? 'Vence ' + fecha(h.fecha_vence) : ''}</td>
@@ -983,7 +1130,7 @@ function PanelFirma({ path, hashEsperado, nombre0, externo, onFirmar, onRechazar
       {url ? <><iframe src={url} title="Documento a firmar" className="pdfv" /><p><a href={url} target="_blank" rel="noopener noreferrer">Abrir el documento en otra pestaña</a></p></> : <div className="vacio">Cargando documento…</div>}
       {integro === false && <p className="msg">No se pudo verificar la integridad del documento (cambió o no se pudo leer). No es posible firmar. Pide una nueva solicitud.</p>}
       {integro && <>
-        <p className="msg ok">✔ Documento verificado. Huella SHA-256: <small>{hash}</small></p>
+        <p className="msg ok">Documento verificado. Huella SHA-256: <small>{hash}</small></p>
         {externo && <div className="frm"><label>Nombre completo<input value={f.nombre} onChange={e => setF({ ...f, nombre: e.target.value })} /></label><label>Documento de identidad<input value={f.cedula} onChange={e => setF({ ...f, cedula: e.target.value })} /></label></div>}
         <b>Tu firma</b><Lienzo onData={setFirma} />
         <label className="chk"><input type="checkbox" checked={f.ok} onChange={e => setF({ ...f, ok: e.target.checked })} /> Declaro que leí el documento, que lo que firmo corresponde a su contenido y que manifiesto mi voluntad de firmarlo por medios electrónicos. Autorizo el registro de mi firma, fecha, hora y dirección IP como constancia.</label>
@@ -1010,7 +1157,7 @@ function FirmaPublica({ token }) {
         <div className="lnk"><input inputMode="numeric" maxLength={6} placeholder="PIN de 6 números" value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, ''))} /><button className="btn" onClick={abrir}>Continuar</button></div>{msg && <p className="msg">{msg}</p>}</>}
       {paso === 'firmar' && <><h2>{d.titulo}</h2>{d.mensaje && <p className="muted">{d.mensaje}</p>}<p className="muted">Archivo: {d.nombre_doc}</p>
         <PanelFirma path={d.path} hashEsperado={d.hash_documento} nombre0={d.firmante_nombre} externo onFirmar={firmar} onRechazar={rechazar} /></>}
-      {paso === 'listo' && <div className="vacio"><b>{d.estado_firmante === 'firmado' ? '✔ Documento firmado' : d.estado_firmante === 'rechazado' ? 'Respondiste que no firmas' : ''}</b><p>Gracias. Ecogis Geomatic S.A.S. recibió tu respuesta.</p></div>}
+      {paso === 'listo' && <div className="vacio"><b>{d.estado_firmante === 'firmado' ? 'Documento firmado' : d.estado_firmante === 'rechazado' ? 'Respondiste que no firmas' : ''}</b><p>Gracias. Ecogis Geomatic S.A.S. recibió tu respuesta.</p></div>}
     </PubLayout>
   )
 }
@@ -1046,7 +1193,7 @@ function PqrsPublica() {
   const consultar = async () => { const { data, error } = await supabase.rpc('consultar_pqrs', { p_radicado: cr, p_email: ce }); setEst(error ? { error: error.message } : data || { error: 'No encontramos una solicitud con esos datos.' }) }
   return (
     <PubLayout>
-      {res ? <div className="vacio"><b>✔ Solicitud recibida</b><p>Tu número de radicado es <b>{res.radicado}</b>. Guárdalo para consultar el estado.</p><p>Fecha límite de respuesta: {fecha(res.fecha_limite)}</p></div> : <>
+      {res ? <div className="vacio"><b>Solicitud recibida</b><p>Tu número de radicado es <b>{res.radicado}</b>. Guárdalo para consultar el estado.</p><p>Fecha límite de respuesta: {fecha(res.fecha_limite)}</p></div> : <>
         <h2>Peticiones, quejas, reclamos y sugerencias</h2><p className="muted">Ecogis Geomatic S.A.S. te responderá al correo que escribas.</p>
         <form onSubmit={enviar} className="auth-box" style={{ boxShadow: 'none', padding: 0, width: '100%' }}>
           <label className="et">Tipo<select value={f.tipo} onChange={set('tipo')}>{Object.entries(TIPO_Q).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
@@ -1070,7 +1217,7 @@ function EncuestasProyecto({ p }) {
   const link = e => `${window.location.origin}/?encuesta=${e.token}`
   const msg = e => `Hola, para Ecogis Geomatic S.A.S. su opinión sobre el proyecto "${p.nombre}" es muy importante. Responder toma 1 minuto: ${link(e)}`
   return (
-    <div className="coms"><b>Encuesta de satisfacción</b> <button className="btn ghost" onClick={async () => { await supabase.from('encuestas').insert({ proyecto_id: p.id, created_by: ACTOR.id }); registrar('Creó encuesta', p.nombre); cargar() }}>＋ Crear enlace</button>
+    <div className="coms"><b>Encuesta de satisfacción</b> <button className="btn ghost" onClick={async () => { await supabase.from('encuestas').insert({ proyecto_id: p.id, created_by: ACTOR.id }); registrar('Creó encuesta', p.nombre); cargar() }}>+ Crear enlace</button>
       {l.map(e => <div key={e.id} className="lnk"><input readOnly value={link(e)} onFocus={x => x.target.select()} />
         {e.respondida_at ? <span className="sem verde">Respondida · {Math.round(((e.p1 + e.p2 + e.p3 + e.p4) / 4) * 20)} %</span> : <>
           <button className="btn" onClick={async () => { await navigator.clipboard.writeText(link(e)); setOk(e.id) }}>{ok === e.id ? '¡Copiado!' : 'Copiar'}</button>
@@ -1147,10 +1294,10 @@ function NuevaFirma({ onClose, onCreada }) {
   return (
     <div className="modal" onClick={onClose}><div className="dlg" onClick={e => e.stopPropagation()}>
       <h3>Nueva solicitud de firma</h3>
-      <label className="et">Documento (solo PDF): {doc ? <b>{doc.nombre} <button className="x2" onClick={() => setDoc(null)}>✕</button></b> : 'ninguno'}<input placeholder="Busca el PDF por nombre…" value={q} onChange={e => buscar(e.target.value)} /></label>
+      <label className="et">Documento (solo PDF): {doc ? <b>{doc.nombre} <button className="x2" onClick={() => setDoc(null)}>×</button></b> : 'ninguno'}<input placeholder="Busca el PDF por nombre…" value={q} onChange={e => buscar(e.target.value)} /></label>
       {res.map(r => <button key={r.id} className="nav small" onClick={() => { setDoc(r); setTitulo(r.nombre.replace(/\.pdf$/i, '')); setRes([]); setQ('') }}>{r.nombre}</button>)}
       <div className="frm"><label>Título<input value={titulo} onChange={e => setTitulo(e.target.value)} /></label><label>Mensaje para los firmantes<input value={mensaje} onChange={e => setMensaje(e.target.value)} /></label></div>
-      <b>Firmantes</b>{fs.map((f, i) => <div key={i} className="apr">{f.tipo === 'interno' ? '👤 Ecogis' : '🌐 Externo'} · {f.nombre} <button className="x2" onClick={() => setFs(fs.filter((_, j) => j !== i))}>✕</button></div>)}
+      <b>Firmantes</b>{fs.map((f, i) => <div key={i} className="apr">{f.tipo === 'interno' ? 'Ecogis' : 'Externo'} · {f.nombre} <button className="x2" onClick={() => setFs(fs.filter((_, j) => j !== i))}>×</button></div>)}
       <div className="lnk"><select value={uid} onChange={e => setUid(e.target.value)}><option value="">Persona de Ecogis…</option>{us.map(u => <option key={u.id} value={u.id}>{u.nombre || u.email}</option>)}</select><button className="btn ghost" onClick={addInt}>Agregar</button></div>
       <div className="lnk"><input placeholder="Externo: nombre" value={ext.nombre} onChange={e => setExt({ ...ext, nombre: e.target.value })} /><input placeholder="correo (opcional)" value={ext.email} onChange={e => setExt({ ...ext, email: e.target.value })} /><button className="btn ghost" onClick={addExt}>Agregar externo</button></div>
       {msg && <p className="msg">{msg}</p>}
@@ -1182,7 +1329,7 @@ function Firmas({ perfil }) {
       const wa1 = x => String(x ?? '').replace(/[^\x20-\x7E\xA0-\xFF]/g, '?')
       let page = pdf.addPage([595, 842]), y = 800
       const t = (txt, o = {}) => { if (y < 70) { page = pdf.addPage([595, 842]); y = 800 } page.drawText(wa1(txt), { x: 50, y, size: o.size || 10, font: o.bold ? bold : font, color: rgb(0.2, 0.28, 0.27), maxWidth: 495 }); y -= o.dy || 15 }
-      t('CERTIFICADO DE FIRMAS ELECTRONICAS', { size: 16, bold: true, dy: 26 }); t('Ecogis Geomatic S.A.S. - Geoteca Ecogis', { dy: 20 })
+      t('CERTIFICADO DE FIRMAS ELECTRONICAS', { size: 16, bold: true, dy: 26 }); t('Ecogis Geomatic S.A.S. - Gerencia Ecogis Geomatic', { dy: 20 })
       t('Documento: ' + d.nombre, { bold: true }); t('Titulo: ' + s.titulo); t('Huella SHA-256 del documento original:'); t(s.hash_documento, { size: 8, dy: 22 })
       for (const f of fm.filter(x => x.solicitud_id === s.id)) {
         if (y < 190) { page = pdf.addPage([595, 842]); y = 800 }
@@ -1201,13 +1348,13 @@ function Firmas({ perfil }) {
   const chip = e => <span className={'est ' + (e === 'firmado' || e === 'completa' ? '' : e === 'pendiente' || e === 'abierta' ? 'revision' : 'borrador')}>{e === 'firmado' ? 'Firmado' : e === 'completa' ? 'Completa' : e === 'abierta' ? 'Abierta' : e === 'pendiente' ? 'Pendiente' : e === 'rechazado' ? 'Rechazó' : 'Cancelada'}</span>
   return (
     <div className="panel solo">
-      <div className="head"><div><h2>Firmas electrónicas</h2><p className="muted">Firma documentos PDF y pídele firma a clientes y empleados.</p></div><button className="btn" onClick={() => setNuevo(true)}>＋ Solicitar firmas</button></div>
+      <div className="head"><div><h2>Firmas electrónicas</h2><p className="muted">Firma documentos PDF y pídele firma a clientes y empleados.</p></div><button className="btn" onClick={() => setNuevo(true)}>+ Solicitar firmas</button></div>
       {msg && <p className="msg ok">{msg}</p>}
       <h3 className="gt">Pendientes por firmar ({mias.length})</h3>
       {!mias.length ? <div className="vacio">No tienes documentos por firmar</div> : mias.map(f => { const s = ss.find(x => x.id === f.solicitud_id); return <div key={f.id} className="lnk"><span><b>{s?.titulo}</b></span><button className="btn" onClick={() => setFirmando({ f, s })}>Revisar y firmar</button></div> })}
       <h3 className="gt">Solicitudes</h3>
       {!ss.length ? <div className="vacio">Aún no hay solicitudes de firma</div> : ss.map(s => <div key={s.id} className="com"><b>{s.titulo}</b> {chip(s.estado)} <small>{docs[s.document_id]?.nombre} · {fecha(s.created_at)}</small>
-        {fm.filter(f => f.solicitud_id === s.id).map(f => <div key={f.id} className="apr">{f.tipo === 'interno' ? '👤' : '🌐'} {f.nombre} — {chip(f.estado)}{f.firmado_at && ` · ${new Date(f.firmado_at).toLocaleString('es-CO')}`}{f.motivo && <small>Motivo: {f.motivo}</small>}</div>)}
+        {fm.filter(f => f.solicitud_id === s.id).map(f => <div key={f.id} className="apr">{f.tipo === 'interno' ? 'Ecogis ·' : 'Externo ·'} {f.nombre} — {chip(f.estado)}{f.firmado_at && ` · ${new Date(f.firmado_at).toLocaleString('es-CO')}`}{f.motivo && <small>Motivo: {f.motivo}</small>}</div>)}
         <div className="lnk">{s.estado === 'abierta' && (s.creada_por === perfil.id || perfil.rol === 'admin') && <><button className="btn ghost" onClick={() => verEnlaces(s)}>Enlaces para externos</button><button className="chip no" onClick={() => cancelar(s)}>Cancelar</button></>}
           {s.estado === 'completa' && !s.doc_firmado_id && (s.creada_por === perfil.id || perfil.rol === 'admin') && <button className="btn" onClick={() => generar(s)}>Generar PDF firmado</button>}
           {s.doc_firmado_id && docs[s.doc_firmado_id] && <button className="btn ghost" onClick={() => setPrev(docs[s.doc_firmado_id])}>Ver PDF firmado</button>}</div></div>)}
@@ -1248,7 +1395,7 @@ function FormReporte({ r, cat, perfil, onClose }) {
         <label>Clima<select value={f.clima} onChange={set('clima')}><option value="">—</option>{CLIMAS.map(c => <option key={c}>{c}</option>)}</select></label>
         <label>Personal en campo<input value={f.personal} onChange={set('personal')} placeholder="Nombres" /></label>
       </div>
-      <p>📍 {f.ubicacion ? `${f.ubicacion.lat}, ${f.ubicacion.lng} (±${f.ubicacion.prec} m)` : 'Sin ubicación'} <button className="chip si" onClick={ubic}>Tomar ubicación</button></p>
+      <p>Ubicación: {f.ubicacion ? `${f.ubicacion.lat}, ${f.ubicacion.lng} (±${f.ubicacion.prec} m)` : 'Sin ubicación'} <button className="chip si" onClick={ubic}>Tomar ubicación</button></p>
       <b>Equipos usados</b><div className="plist">{cat.equipos.map(e => <label key={e.id} className="chk"><input type="checkbox" checked={f.equipos.includes(e.id)} onChange={x => setF(y => ({ ...y, equipos: x.target.checked ? [...y.equipos, e.id] : y.equipos.filter(i => i !== e.id) }))} /> {e.codigo} · {e.nombre}</label>)}{!cat.equipos.length && <small>Sin equipos cargados (se actualizan cuando abres la página con internet).</small>}</div>
       <label className="et">Actividades realizadas<textarea rows={4} value={f.actividades} onChange={set('actividades')} style={{ font: 'inherit', padding: 10, border: '1px solid var(--line)', borderRadius: 8 }} /></label>
       <label className="et">Observaciones y novedades<textarea rows={3} value={f.observaciones} onChange={set('observaciones')} style={{ font: 'inherit', padding: 10, border: '1px solid var(--line)', borderRadius: 8 }} /></label>
@@ -1256,9 +1403,9 @@ function FormReporte({ r, cat, perfil, onClose }) {
       <label className="chk"><b><input type="checkbox" checked={f.dron} onChange={e => setF({ ...f, dron: e.target.checked })} /> Hubo operación con dron</b></label>{f.dron && chk(CHK_DRON, 'dron_checklist')}
       <label className="chk"><b><input type="checkbox" checked={f.incidente} onChange={e => setF({ ...f, incidente: e.target.checked })} /> Hubo accidente o incidente</b></label>{f.incidente && <label className="et">¿Qué pasó?<input value={f.incidente_detalle} onChange={set('incidente_detalle')} /></label>}
       <b>Fotos ({f.fotos.length})</b>
-      <div className="lnk"><button className="btn ghost" onClick={() => cam.current.click()}>📷 Tomar foto</button><button className="btn ghost" onClick={() => gal.current.click()}>🖼 Elegir de la galería</button>{proc && <small>Procesando…</small>}</div>
+      <div className="lnk"><button className="btn ghost" onClick={() => cam.current.click()}>Tomar foto</button><button className="btn ghost" onClick={() => gal.current.click()}>Elegir de la galería</button>{proc && <small>Procesando…</small>}</div>
       <input ref={cam} type="file" accept="image/*" capture="environment" hidden onChange={e => { fotos([...e.target.files]); e.target.value = '' }} /><input ref={gal} type="file" accept="image/*" multiple hidden onChange={e => { fotos([...e.target.files]); e.target.value = '' }} />
-      <div className="fotos">{f.fotos.map(ft => <div key={ft.id}><Mini blob={ft.blob} /><input placeholder="Descripción" value={ft.pie} onChange={e => setF(y => ({ ...y, fotos: y.fotos.map(z => (z.id === ft.id ? { ...z, pie: e.target.value } : z)) }))} /><button className="x2" onClick={() => setF(y => ({ ...y, fotos: y.fotos.filter(z => z.id !== ft.id) }))}>✕ quitar</button></div>)}</div>
+      <div className="fotos">{f.fotos.map(ft => <div key={ft.id}><Mini blob={ft.blob} /><input placeholder="Descripción" value={ft.pie} onChange={e => setF(y => ({ ...y, fotos: y.fotos.map(z => (z.id === ft.id ? { ...z, pie: e.target.value } : z)) }))} /><button className="x2" onClick={() => setF(y => ({ ...y, fotos: y.fotos.filter(z => z.id !== ft.id) }))}>× quitar</button></div>)}</div>
       {msg && <p className="msg">{msg}</p>}
       <div className="dact"><button className="btn ghost" onClick={onClose}>Cancelar</button><button className="btn ghost" onClick={() => guardar(false)}>Guardar borrador</button><button className="btn" onClick={() => guardar(true)}>Guardar y enviar</button></div>
       <small>{navigator.onLine ? 'Se enviará ahora.' : 'Sin internet: se guarda en tu celular y se envía solo cuando vuelva la señal.'}</small>
@@ -1280,7 +1427,7 @@ function Campo({ perfil }) {
   const verPdf = async id => { const { data } = await supabase.from('documents').select('*').eq('id', id).maybeSingle(); if (data) setPrev(data) }
   return (
     <div className="panel solo">
-      <div className="head"><div><h2>Reportes de campo</h2><p className="muted">Funcionan sin internet: se guardan en tu celular y se envían solos cuando vuelve la señal (con la página abierta).</p></div><button className="btn" onClick={() => setEdit({})}>＋ Nuevo reporte</button></div>
+      <div className="head"><div><h2>Reportes de campo</h2><p className="muted">Funcionan sin internet: se guardan en tu celular y se envían solos cuando vuelve la señal (con la página abierta).</p></div><button className="btn" onClick={() => setEdit({})}>+ Nuevo reporte</button></div>
       {l.length > 0 && <><h3 className="gt">En este celular ({l.length})</h3>
         {navigator.onLine && l.some(r => r.estado !== 'borrador') && <button className="btn ghost" onClick={() => sincronizarReportes()}>Enviar ahora</button>}
         {l.map(r => { const [c, t] = ESTADO[r.estado] || ESTADO.borrador; return <div key={r.id} className="com"><b>{pn(r.proyecto_id)}</b> · {r.fecha} {r.hora} <span className={'est ' + c}>{t}</span><small>{r.fotos.length} foto(s) · {r.actividades.slice(0, 80)}</small>{r.error && <small className="rojo">{r.error}</small>}
@@ -1306,12 +1453,12 @@ function Grupos() {
     const { data: u } = await supabase.from('profiles').select('id,nombre,email').eq('activo', true).order('nombre'); setUs(u || [])
   }, [])
   useEffect(() => { cargar() }, [cargar])
-  const crear = async () => { const n = prompt('Nombre del grupo (ej. Técnica, Administrativa, Talento Humano):'); if (!n?.trim()) return; const { error } = await supabase.from('grupos').insert({ nombre: n.trim() }); if (error) alert(error.message); cargar() }
+  const crear = async () => { const n = prompt('Nombre del área (ej. Técnica, Administrativa, Talento Humano):'); if (!n?.trim()) return; const { error } = await supabase.from('grupos').insert({ nombre: n.trim() }); if (error) alert(error.message); cargar() }
   const marcar = async (g, u, on) => { if (on) await supabase.from('grupo_miembros').insert({ grupo_id: g.id, user_id: u.id }); else await supabase.from('grupo_miembros').delete().eq('grupo_id', g.id).eq('user_id', u.id); registrar(on ? 'Agregó a grupo' : 'Quitó de grupo', `${g.nombre}: ${u.nombre || u.email}`); cargar() }
   return (
-    <div><div className="head"><div><h3 className="gt">Grupos por área</h3><p className="muted">Dale acceso a una carpeta privada a un grupo completo (clic derecho en la carpeta → Permisos).</p></div><button className="btn" onClick={crear}>＋ Nuevo grupo</button></div>
-      {!gs.length && <div className="vacio">Aún no hay grupos</div>}
-      {gs.map(g => <div key={g.id} className="com"><b>{g.nombre}</b> <button className="x2" onClick={async () => { if (confirm(`¿Eliminar el grupo "${g.nombre}"?`)) { await supabase.from('grupos').delete().eq('id', g.id); cargar() } }}>✕ eliminar grupo</button>
+    <div style={{ marginTop: 32 }}><div className="head"><div><h3 className="gt" style={{ margin: 0 }}>Áreas de trabajo</h3><p className="muted">Agrupa a las personas por dependencia y dale acceso a una carpeta privada a toda un área (clic derecho en la carpeta → Permisos y privacidad).</p></div><button className="btn" onClick={crear}>+ Nueva área</button></div>
+      {!gs.length && <div className="vacio">Aún no hay áreas. Crea la primera, por ejemplo “Dirección Técnica / Operaciones”.</div>}
+      {gs.map(g => <div key={g.id} className="com"><b>{g.nombre}</b> <button className="x2" onClick={async () => { if (confirm(`¿Eliminar el área "${g.nombre}"?`)) { await supabase.from('grupos').delete().eq('id', g.id); cargar() } }}>× eliminar área</button>
         <div className="plist">{us.map(u => <label key={u.id} className="chk"><input type="checkbox" checked={ms.some(m => m.grupo_id === g.id && m.user_id === u.id)} onChange={e => marcar(g, u, e.target.checked)} /> {u.nombre || u.email}</label>)}</div></div>)}
     </div>
   )
@@ -1322,7 +1469,7 @@ function Drive({ perfil, q, inicio, irVista }) {
   const [vista, setVista] = useState('grid'), [ft, setFt] = useState(''), [menu, setMenu] = useState(null), [nuevo, setNuevo] = useState(false)
   const [prev, setPrev] = useState(null), [share, setShare] = useState(null), [pend, setPend] = useState(null)
   const [over, setOver] = useState(false), [busy, setBusy] = useState(false), [msg, setMsg] = useState(''), [rec, setRec] = useState(false), [uso, setUso] = useState(0), [perm, setPerm] = useState(null), [prog, setProg] = useState(null), [ficha, setFicha] = useState(null), [favs, setFavs] = useState(new Set())
-  const drag = useRef(null), inp = useRef(), mx = useRef(0), nvInp = useRef(), nvDoc = useRef(null)
+  const drag = useRef(null), inp = useRef(), mx = useRef(0), nvInp = useRef(), nvDoc = useRef(null), dirInp = useRef()
 
   const cargar = useCallback(async () => {
     const { data: f } = await supabase.from('folders').select('*').is('deleted_at', null).order('nombre'); setFolders(f || [])
@@ -1415,6 +1562,33 @@ function Drive({ perfil, q, inicio, irVista }) {
     window.XLSX.writeFile(wb, `Listado-Maestro_${new Date().toISOString().slice(0, 10).replaceAll('-', '')}.xlsx`)
     registrar('Exportó listado maestro', `${filas.length} documentos`); setMsg('')
   }
+  const subirCarpeta = async lista => {
+    const files = [...lista]; if (!files.length) return
+    setBusy(true); setMsg(''); const mapa = new Map([['', cur]]); let n = 0
+    const asegurar = async partes => {
+      let ruta = '', padre = cur
+      for (const nombre of partes) {
+        ruta += '/' + nombre
+        if (!mapa.has(ruta)) {
+          const ex = folders.find(f => f.parent_id === padre && f.nombre === nombre)
+          if (ex) mapa.set(ruta, ex.id)
+          else { const { data, error } = await supabase.from('folders').insert({ nombre, parent_id: padre, created_by: perfil.id }).select().single(); if (error) throw error; mapa.set(ruta, data.id) }
+        }
+        padre = mapa.get(ruta)
+      }
+      return padre
+    }
+    try {
+      for (const file of files) {
+        const carpeta = await asegurar(file.webkitRelativePath.split('/').slice(0, -1))
+        const path = `${carpeta || 'raiz'}/${Date.now()}-${file.name.replace(/[^\w.\-]/g, '_')}`
+        const ue = await enviar(file, path, file.name); if (ue) { setMsg(ue.message); continue }
+        const { error } = await supabase.from('documents').insert({ folder_id: carpeta, nombre: file.name, path, tamano: file.size, tipo: file.type, categoria: detectar(file.name), uploaded_by: perfil.id, uploaded_by_nombre: perfil.nombre || perfil.email })
+        if (error) setMsg(error.message); else n++
+      }
+    } catch (e) { setMsg(e.message) }
+    setBusy(false); registrar('Subió carpeta', `${files[0].webkitRelativePath.split('/')[0]} (${n} archivos)`); cargar()
+  }
   const preparar = files => files.length && setPend(files.map(file => ({ file, tipo: detectar(file.name) })))
   const subir = async arr => {
     setPend(null); setBusy(true); setMsg('')
@@ -1458,7 +1632,7 @@ function Drive({ perfil, q, inicio, irVista }) {
       <div key={t + x.id} className="it" draggable onDragStart={e => { drag.current = { tipo: t, id: x.id }; e.dataTransfer.effectAllowed = 'move' }} onDragEnd={() => { drag.current = null }}
         onClick={() => (f ? ir(x.id) : setPrev(x))} onContextMenu={e => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, t, i: x }) }} {...(f ? dnd(x.id) : {})}>
         <div className="ic">{f ? <FolderIcon c={x.color} /> : <FileIcon n={x.nombre} />}</div>
-        <div className="nm" title={x.nombre}>{x.nombre}{x.restringida ? ' 🔒' : ''}{favs.has(t + x.id) ? ' ⭐' : ''}{!f && x.estado && x.estado !== 'vigente' && <span className={'est ' + x.estado}>{ESTADOS[x.estado]}</span>}{!f && (x.etiquetas || []).slice(0, 2).map(g => <span key={g} className="tg">#{g}</span>)}</div>
+        <div className="nm" title={x.nombre}>{x.nombre}{x.restringida && <span className="lockic" title="Carpeta privada"><Ico n="lock" size={13} /></span>}{favs.has(t + x.id) ? ' ★' : ''}{!f && x.estado && x.estado !== 'vigente' && <span className={'est ' + x.estado}>{ESTADOS[x.estado]}</span>}{!f && (x.etiquetas || []).slice(0, 2).map(g => <span key={g} className="tg">#{g}</span>)}{!f && x.vence_at && (() => { const [c, tx] = semaforo(x.vence_at); return c !== 'verde' ? <span className={'sem ' + c}>Vence: {tx}</span> : null })()}</div>
         <div className="meta">{f ? 'Carpeta' : x.categoria || '—'}</div><div className="meta">{f ? '' : fmt(x.tamano)}</div><div className="meta">{f ? '' : x.uploaded_by_nombre}</div><div className="meta">{fecha(x.created_at)}</div>
         <button className="dots" aria-label="Más opciones" onClick={e => { e.stopPropagation(); const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: r.left - 140, y: r.bottom, t, i: x }) }}>⋮</button>
       </div>
@@ -1473,16 +1647,18 @@ function Drive({ perfil, q, inicio, irVista }) {
           {nuevo && <div className="pop" onClick={e => e.stopPropagation()}>
             <button onClick={() => { setNuevo(false); crearProyecto() }}>Nuevo proyecto (estructura estándar)</button>
             <button onClick={() => { setNuevo(false); crearCarpeta() }}>Nueva carpeta</button>
-            <button onClick={() => { setNuevo(false); inp.current.click() }}>Subir archivos</button></div>}
+            <button onClick={() => { setNuevo(false); inp.current.click() }}>Subir archivos</button>
+            <button onClick={() => { setNuevo(false); dirInp.current.click() }}>Subir carpeta completa</button></div>}
           <input ref={inp} type="file" multiple hidden onChange={e => { preparar([...e.target.files]); e.target.value = '' }} />
           <input ref={nvInp} type="file" hidden onChange={e => { nuevaVersion(e.target.files[0]); e.target.value = '' }} />
+          <input ref={dirInp} type="file" webkitdirectory="" directory="" multiple hidden onChange={e => { subirCarpeta(e.target.files); e.target.value = '' }} />
         </div>
         <button className={'nav' + (!cur && !q && !rec ? ' on' : '')} onClick={() => ir(null)} {...dnd(null)}>Unidad de Ecogis</button>
         <button className={'nav' + (rec && !q ? ' on' : '')} onClick={() => setRec(true)}>Recientes</button>
-        <button className="nav" onClick={() => irVista('fav')}>⭐ Destacados</button>
-        <div className="sub">Proyectos</div>
+        <button className="nav" onClick={() => irVista('fav')}>Destacados</button>
+        <div className="sub">Dependencias</div>
         {folders.filter(f => !f.parent_id).map(f => <button key={f.id} className={'nav small' + (ruta[0]?.id === f.id ? ' on' : '')} onClick={() => ir(f.id)} {...dnd(f.id)}><i style={{ background: f.color || '#374845' }} />{f.nombre}</button>)}
-        {perfil.rol === 'admin' && <button className="nav small" onClick={exportarMaestro}>⬇ Listado maestro (Excel)</button>}
+        {perfil.rol === 'admin' && <button className="nav small" onClick={exportarMaestro}>Listado maestro (Excel)</button>}
         <div className="uso"><div className="barra"><i style={{ width: Math.min(100, (uso / 1073741824) * 100) + '%' }} /></div><small>{uso ? fmt(uso) : '0 KB'} usados de 1 GB</small></div>
       </aside>
       <main className={'panel' + (over ? ' over' : '')} {...dz}>
@@ -1508,7 +1684,7 @@ function Drive({ perfil, q, inicio, irVista }) {
       {menu && <div className="ctx" style={{ left: Math.min(menu.x, window.innerWidth - 200), top: Math.min(menu.y, window.innerHeight - 260) }} onClick={e => e.stopPropagation()}>
         <button onClick={() => { menu.t === 'f' ? ir(menu.i.id) : setPrev(menu.i); setMenu(null) }}>Abrir</button>
         <button onClick={() => { setShare(menu); setMenu(null) }}>Compartir</button>
-        <button onClick={() => { alternarFav(menu.t, menu.i); setMenu(null) }}>{favs.has(menu.t + menu.i.id) ? 'Quitar de destacados' : 'Destacar ⭐'}</button>
+        <button onClick={() => { alternarFav(menu.t, menu.i); setMenu(null) }}>{favs.has(menu.t + menu.i.id) ? 'Quitar de destacados' : 'Destacar'}</button>
         {menu.t === 'f' && perfil.rol === 'admin' && <button onClick={() => { setPerm(menu.i); setMenu(null) }}>Permisos y privacidad</button>}
         {menu.t === 'd' && <button onClick={() => { descargar(menu.i); setMenu(null) }}>Descargar</button>}
         {menu.t === 'd' && <button onClick={() => { setFicha(menu.i); setMenu(null) }}>Propiedades y versiones</button>}
@@ -1532,35 +1708,79 @@ function Drive({ perfil, q, inicio, irVista }) {
   )
 }
 
-function Usuarios({ perfil }) {
-  const [users, setUsers] = useState([])
-  const cargar = useCallback(async () => { const { data } = await supabase.from('profiles').select('*').order('created_at'); setUsers(data || []) }, [])
+function AccesoUsuario({ u, onClose, onChange }) {
+  const [gs, setGs] = useState([]), [mi, setMi] = useState([]), [fo, setFo] = useState([]), [ac, setAc] = useState([]), [fg, setFg] = useState([])
+  const cargar = useCallback(async () => {
+    const { data: g } = await supabase.from('grupos').select('*').order('nombre'); setGs(g || [])
+    const { data: m } = await supabase.from('grupo_miembros').select('grupo_id').eq('user_id', u.id); setMi((m || []).map(x => x.grupo_id))
+    const { data: f } = await supabase.from('folders').select('id,nombre,restringida').is('parent_id', null).is('deleted_at', null).order('nombre'); setFo(f || [])
+    const { data: a } = await supabase.from('folder_access').select('folder_id').eq('user_id', u.id); setAc((a || []).map(x => x.folder_id))
+    const { data: x } = await supabase.from('folder_access_grupos').select('*'); setFg(x || [])
+  }, [u.id])
   useEffect(() => { cargar() }, [cargar])
-  const cambiar = async (id, c) => { await supabase.from('profiles').update(c).eq('id', id); cargar() }
+  const area = async (g, on) => { if (on) await supabase.from('grupo_miembros').insert({ grupo_id: g.id, user_id: u.id }); else await supabase.from('grupo_miembros').delete().eq('grupo_id', g.id).eq('user_id', u.id); registrar(on ? 'Asignó área' : 'Quitó área', `${u.nombre || u.email}: ${g.nombre}`); cargar(); onChange() }
+  const directo = async (f, on) => { if (on) await supabase.from('folder_access').insert({ folder_id: f.id, user_id: u.id }); else await supabase.from('folder_access').delete().eq('folder_id', f.id).eq('user_id', u.id); registrar(on ? 'Dio acceso a carpeta' : 'Quitó acceso a carpeta', `${u.nombre || u.email}: ${f.nombre}`); cargar() }
   return (
-    <div className="panel solo"><h2>Usuarios</h2><p className="muted">Quienes se registran quedan inactivos hasta que los actives aquí.</p>
-      <table><thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Acceso</th></tr></thead><tbody>{users.map(u => <tr key={u.id}><td>{u.nombre || '—'}</td><td>{u.email}</td>
-        <td><select disabled={u.id === perfil.id} value={u.rol} onChange={e => cambiar(u.id, { rol: e.target.value })}><option value="miembro">Miembro</option><option value="admin">Administrador</option></select></td>
-        <td><button className={'chip ' + (u.activo ? 'si' : 'no')} disabled={u.id === perfil.id} onClick={() => cambiar(u.id, { activo: !u.activo })}>{u.activo ? 'Activo' : 'Inactivo · activar'}</button></td></tr>)}</tbody></table><Grupos /></div>
+    <div className="modal" onClick={onClose}><div className="dlg" onClick={e => e.stopPropagation()}>
+      <h3>{u.nombre || u.email}</h3><p className="muted">Define a qué áreas pertenece y a qué carpetas principales puede entrar.{u.rol === 'admin' ? ' Es administrador: ve todo.' : ''}</p>
+      <h4 className="gt">Áreas (dependencias)</h4>{!gs.length && <p className="muted">Aún no hay áreas. Créalas abajo, en “Áreas de trabajo”.</p>}
+      {gs.map(g => <label key={g.id} className="chk"><input type="checkbox" checked={mi.includes(g.id)} onChange={e => area(g, e.target.checked)} /> {g.nombre}</label>)}
+      <h4 className="gt">Carpetas principales</h4>
+      <table><tbody>{fo.map(f => { const via = fg.filter(x => x.folder_id === f.id && mi.includes(x.grupo_id)).map(x => gs.find(g => g.id === x.grupo_id)?.nombre).filter(Boolean)
+        return <tr key={f.id}><td>{f.nombre}</td><td>{!f.restringida ? <span className="sem verde">Libre para todos</span> : via.length ? <span className="sem verde">Por área: {via.join(', ')}</span>
+          : <label className="chk" style={{ margin: 0 }}><input type="checkbox" checked={ac.includes(f.id)} onChange={e => directo(f, e.target.checked)} /> Acceso directo</label>}</td></tr> })}</tbody></table>
+      <p className="muted">Para hacer privada una carpeta: Archivos → clic derecho → Permisos y privacidad.</p>
+      <div className="dact"><button className="btn" onClick={onClose}>Listo</button></div>
+    </div></div>
   )
 }
 
-function MiCuenta({ perfil, onNombre }) {
-  const [n, setN] = useState(null)
+function Usuarios({ perfil }) {
+  const [users, setUsers] = useState([]), [ms, setMs] = useState([]), [gs, setGs] = useState([]), [sel, setSel] = useState(null)
+  const cargar = useCallback(async () => {
+    const { data } = await supabase.from('profiles').select('*').order('created_at'); setUsers(data || [])
+    const { data: m } = await supabase.from('grupo_miembros').select('*'); setMs(m || [])
+    const { data: g } = await supabase.from('grupos').select('*').order('nombre'); setGs(g || [])
+  }, [])
+  useEffect(() => { cargar() }, [cargar])
+  const cambiar = async (id, c) => { await supabase.from('profiles').update(c).eq('id', id); cargar() }
+  return (
+    <div className="panel solo"><div className="head"><div><h2>Usuarios y áreas</h2><p className="muted">Quienes se registran quedan inactivos hasta que los actives. El acceso a carpetas se da por área o directamente.</p></div></div>
+      <div className="tabla-w"><table><thead><tr><th>Persona</th><th>Rol</th><th>Áreas</th><th>Acceso</th><th /></tr></thead>
+        <tbody>{users.map(u => <tr key={u.id}>
+          <td><div style={{ display: 'flex', gap: 10, alignItems: 'center' }}><Avatar u={u} size={34} /><div>{u.nombre || '—'}<small>{u.email}</small></div></div></td>
+          <td><select disabled={u.id === perfil.id} value={u.rol} onChange={e => cambiar(u.id, { rol: e.target.value })}><option value="miembro">Miembro</option><option value="admin">Administrador</option></select></td>
+          <td>{u.rol === 'admin' ? <span className="muted">Todas</span> : ms.filter(m => m.user_id === u.id).map(m => gs.find(g => g.id === m.grupo_id)?.nombre).filter(Boolean).join(', ') || <span className="muted">Sin área</span>}</td>
+          <td><button className={'chip ' + (u.activo ? 'si' : 'no')} disabled={u.id === perfil.id} onClick={() => cambiar(u.id, { activo: !u.activo })}>{u.activo ? 'Activo' : 'Inactivo · activar'}</button></td>
+          <td><button className="btn ghost" onClick={() => setSel(u)}>Áreas y carpetas</button></td></tr>)}</tbody></table></div>
+      <Grupos />{sel && <AccesoUsuario u={sel} onClose={() => setSel(null)} onChange={cargar} />}
+    </div>
+  )
+}
+
+function MiCuenta({ perfil, onPerfil, onSeg }) {
+  const [n, setN] = useState(null), [msg, setMsg] = useState(''), foto = useRef()
   useEffect(() => { supabase.from('documents').select('id', { count: 'exact', head: true }).eq('uploaded_by', perfil.id).then(({ count }) => setN(count)) }, [perfil.id])
-  const cambiar = async () => {
-    const v = prompt('Tu nombre:', perfil.nombre || ''); if (!v?.trim()) return
-    await supabase.rpc('actualizar_mi_nombre', { p_nombre: v.trim() }); onNombre(v.trim())
+  const cambiarFoto = async file => {
+    if (!file) return; setMsg('Subiendo foto…')
+    try {
+      const blob = await recortarCuadrado(file), path = `${perfil.id}/${Date.now()}.jpg`
+      const up = await supabase.storage.from('avatares').upload(path, blob, { contentType: 'image/jpeg' }); if (up.error) throw up.error
+      const { error } = await supabase.rpc('actualizar_mi_perfil', { p_nombre: perfil.nombre, p_avatar: path }); if (error) throw error
+      if (perfil.avatar) supabase.storage.from('avatares').remove([perfil.avatar])
+      onPerfil({ avatar: path }); setMsg('')
+    } catch (e) { setMsg('No se pudo cambiar la foto: ' + (e.message || e)) }
   }
+  const cambiarNombre = async () => { const v = prompt('Tu nombre:', perfil.nombre || ''); if (!v?.trim()) return; const { error } = await supabase.rpc('actualizar_mi_perfil', { p_nombre: v.trim(), p_avatar: null }); if (!error) onPerfil({ nombre: v.trim() }) }
   return (
     <div className="acct" onClick={e => e.stopPropagation()}>
-      <div className="big">{(perfil.nombre || perfil.email || '?')[0].toUpperCase()}</div>
-      <b>{perfil.nombre || 'Sin nombre'}</b><span className="muted">{perfil.email}</span>
+      <div className="acct-top"><Avatar u={perfil} size={52} /><div><b>{perfil.nombre || 'Sin nombre'}</b><span>{perfil.email}</span></div></div>
       <div className="kv"><span>Rol</span><b>{perfil.rol === 'admin' ? 'Administrador' : 'Miembro'}</b></div>
-      <div className="kv"><span>Archivos subidos</span><b>{n ?? '…'}</b></div>
-      <div className="kv"><span>Miembro desde</span><b>{fecha(perfil.created_at)}</b></div>
-      <button className="btn ghost" onClick={cambiar}>Editar mi nombre</button>
-      <button className="btn" onClick={() => supabase.auth.signOut()}>Cerrar sesión</button>
+      <div className="kv"><span>Archivos subidos</span><b>{n ?? '…'}</b></div><div className="kv"><span>Miembro desde</span><b>{fecha(perfil.created_at)}</b></div>
+      <input ref={foto} type="file" accept="image/*" hidden onChange={e => { cambiarFoto(e.target.files[0]); e.target.value = '' }} />
+      <button className="mi" onClick={() => foto.current.click()}>Cambiar foto</button><button className="mi" onClick={cambiarNombre}>Editar nombre</button>
+      <button className="mi" onClick={onSeg}>Verificación en dos pasos</button><button className="mi rojo" onClick={() => supabase.auth.signOut()}>Cerrar sesión</button>
+      {msg && <p className="msg">{msg}</p>}
     </div>
   )
 }
@@ -1583,20 +1803,20 @@ function Accesos({ perfil }) {
   return (
     <div className="panel solo">
       <div className="head"><div><h2>Accesos rápidos</h2><p className="muted">Las páginas y trámites que usa Ecogis Geomatic, en un solo lugar.</p></div>
-        {admin && <button className="btn" onClick={agregar}>＋ Agregar acceso</button>}</div>
+        {admin && <button className="btn" onClick={agregar}>+ Agregar acceso</button>}</div>
       {grupos.map((g, k) => <div key={g}><h3 className="gt">{g}</h3>
         <div className="links">{l.filter(x => x.grupo === g).map(x =>
           <a key={x.id} className="lk" href={x.url} target="_blank" rel="noopener noreferrer">
             <span className="lki" style={{ background: pal[k % pal.length] }}>{x.nombre[0]}</span>
             <span><b>{x.nombre}</b><small>{x.descripcion}</small></span>
-            {admin && <button className="x" title="Quitar" onClick={e => { e.preventDefault(); quitar(x) }}>✕</button>}
+            {admin && <button className="x" title="Quitar" onClick={e => { e.preventDefault(); quitar(x) }}>×</button>}
           </a>)}</div></div>)}
     </div>
   )
 }
 
 function Principal() {
-  const [sesion, setSesion] = useState(undefined), [perfil, setPerfil] = useState(null), [vista, setVista] = useState('docs'), [q, setQ] = useState(''), [cuenta, setCuenta] = useState(false), [recuperar, setRecuperar] = useState(false), [mas, setMas] = useState(false), [inicio, setInicio] = useState(null), [pend, setPend] = useState(0), [pendF, setPendF] = useState(0), [offline, setOffline] = useState(!navigator.onLine), [pendCampo, setPendCampo] = useState(0)
+  const [sesion, setSesion] = useState(undefined), [perfil, setPerfil] = useState(null), [vista, setVista] = useState('inicio'), [q, setQ] = useState(''), [cuenta, setCuenta] = useState(false), [recuperar, setRecuperar] = useState(false), [mas, setMas] = useState(false), [inicio, setInicio] = useState(null), [pend, setPend] = useState(0), [pendF, setPendF] = useState(0), [offline, setOffline] = useState(!navigator.onLine), [pendCampo, setPendCampo] = useState(0), [navAb, setNavAb] = useState(false), [mfa, setMfa] = useState('ok'), [seg, setSeg] = useState(false), [tieneMfa, setTieneMfa] = useState(true)
   useEffect(() => {
     const cache = () => { const c = leerJSON(PERFIL_KEY); return c ? { user: { id: c.id }, offline: true } : null }
     supabase.auth.getSession().then(({ data }) => setSesion(data.session || (!navigator.onLine ? cache() : null))).catch(() => setSesion(cache()))
@@ -1620,34 +1840,48 @@ function Principal() {
     return () => { clearInterval(t); window.removeEventListener('geoteca-reportes', h); window.removeEventListener('online', on) }
   }, [perfil])
   useEffect(() => { if (offline) setVista('campo') }, [offline])
+  useEffect(() => {
+    if (!sesion || sesion.offline) return
+    supabase.auth.mfa.getAuthenticatorAssuranceLevel().then(({ data }) => { if (data?.nextLevel === 'aal2' && data.currentLevel !== 'aal2') setMfa('pedir'); else { setMfa('ok'); setTieneMfa(data?.nextLevel === 'aal2' || data?.currentLevel === 'aal2') } })
+  }, [sesion])
   useEffect(() => { if (!perfil?.activo) return; const c = t => supabase.from(t).select('id', { count: 'exact', head: true }).eq('user_id', perfil.id).eq('estado', 'pendiente'); Promise.all([c('aprobaciones'), c('firmas_firmantes')]).then(([x, y]) => { setPend((x.count || 0) + (y.count || 0)); setPendF(y.count || 0) }) }, [perfil, vista])
   if (sesion === undefined) return null
   if (recuperar) return <NuevaClave onListo={() => setRecuperar(false)} />
+  if (mfa === 'pedir') return <MfaCodigo onListo={() => { setMfa('ok'); setSesion(x => ({ ...x })) }} />
   if (!sesion) return <Auth />
   if (!perfil) return <p className="vacio">Cargando…</p>
   if (!perfil.activo) return <div className="auth"><div className="auth-box"><Logo /><h2>Cuenta pendiente de activación</h2><p className="muted">Un administrador de Ecogis debe activar tu acceso.</p><button className="btn" onClick={() => supabase.auth.signOut()}>Salir</button></div></div>
+  const esAdmin = perfil.rol === 'admin', badge = k => (k === 'apr' ? pend - pendF : k === 'firmas' ? pendF : k === 'campo' ? pendCampo : 0)
   return (
-    <div className="app">
-      <header className="top"><Logo />
-        <input className="search" placeholder="Buscar en la unidad" value={q} onChange={e => { setQ(e.target.value); setVista('docs') }} />
-        <button className={'tab' + (vista === 'docs' ? ' on' : '')} onClick={() => setVista('docs')}>Archivos</button>
-        <button className={'tab' + (vista === 'campo' ? ' on' : '')} onClick={() => setVista('campo')}>Campo{pendCampo ? ` (${pendCampo})` : ''}</button>
-        {GRUPOS.map(g => <div key={g.t} className="masw"><button className={'tab' + (g.items.some(([k]) => k === vista) ? ' on' : '')} onClick={e => { e.stopPropagation(); setMas(mas === g.t ? false : g.t) }}>{g.t} ▾</button>
-          {mas === g.t && <div className="ctx mas" onClick={e => e.stopPropagation()}>{g.items.map(([k, t]) => <button key={k} onClick={() => { setVista(k); setMas(false) }}>{t}</button>)}</div>}</div>)}
-        <button className={'tab' + (vista === 'links' ? ' on' : '')} onClick={() => setVista('links')}>Accesos</button>
-        <div className="masw"><button className={'tab' + (['apr', 'trash', 'users', 'log', 'fav'].includes(vista) ? ' on' : '')} onClick={e => { e.stopPropagation(); setMas(mas === 'mas' ? false : 'mas') }}>Más{pend ? ` (${pend})` : ''} ▾</button>
-          {mas === 'mas' && <div className="ctx mas" onClick={e => e.stopPropagation()}>
-            <button onClick={() => { setVista('apr'); setMas(false) }}>Mis aprobaciones{pend - pendF ? ` (${pend - pendF})` : ''}</button>
-            <button onClick={() => { setVista('firmas'); setMas(false) }}>Mis firmas{pendF ? ` (${pendF})` : ''}</button>
-            <button onClick={() => { setVista('fav'); setMas(false) }}>⭐ Destacados</button>
-            <button onClick={() => { setVista('trash'); setMas(false) }}>Papelera</button>
-            {perfil.rol === 'admin' && <button onClick={() => { setVista('users'); setMas(false) }}>Usuarios</button>}
-            {perfil.rol === 'admin' && <button onClick={() => { setVista('log'); setMas(false) }}>Actividad</button>}</div>}</div>
-        <div className="avw"><button className="av" title="Mi cuenta" onClick={e => { e.stopPropagation(); setCuenta(!cuenta) }}>{(perfil.nombre || perfil.email || '?')[0].toUpperCase()}</button>
-          {cuenta && <MiCuenta perfil={perfil} onNombre={n => setPerfil({ ...perfil, nombre: n })} />}</div>
-      </header>
-      {offline && <div className="banner">Sin conexión: tus reportes de campo se guardan en el celular y se envían solos cuando vuelva el internet.</div>}
-      {vista === 'campo' ? <Campo perfil={perfil} /> : offline ? <SinConexion onCampo={() => setVista('campo')} /> : vista === 'docs' ? <Drive perfil={perfil} q={q} inicio={inicio} irVista={setVista} /> : vista === 'proy' ? <Proyectos perfil={perfil} onAbrir={abrir} /> : vista === 'equipos' ? <Equipos perfil={perfil} /> : vista === 'tareas' ? <Tareas perfil={perfil} /> : vista === 'opor' ? <Oportunidades perfil={perfil} /> : vista === 'hab' ? <Habilitantes perfil={perfil} /> : vista === 'firmas' ? <Firmas perfil={perfil} /> : vista === 'pqrs' ? <Pqrs perfil={perfil} /> : vista === 'apr' ? <MisAprobaciones perfil={perfil} /> : vista === 'ind' ? <Indicadores perfil={perfil} /> : vista === 'fav' ? <Destacados onAbrir={abrir} /> : vista === 'links' ? <Accesos perfil={perfil} /> : vista === 'trash' ? <Papelera perfil={perfil} /> : vista === 'log' ? <Actividad /> : <Usuarios perfil={perfil} />}
+    <div className="shell">
+      <aside className={'sidenav' + (navAb ? ' abierto' : '')}>
+        <div className="sn-logo"><Logo h={34} sub={false} /></div>
+        <nav>{NAV.filter(g => !g.admin || esAdmin).map((g, i) => <div key={i}>{g.t && <div className="sn-t">{g.t}</div>}
+          {g.items.filter(it => !it[3] || esAdmin).map(([k, t, ic]) => <button key={k} className={'sn-i' + (vista === k ? ' on' : '')} onClick={() => { setVista(k); setNavAb(false) }}><Ico n={ic} /><span>{t}</span>{badge(k) > 0 && <b className="sn-b">{badge(k)}</b>}</button>)}</div>)}</nav>
+        <div className="sn-pie">Ecogis Geomatic S.A.S.</div>
+      </aside>
+      {navAb && <div className="sn-vel" onClick={() => setNavAb(false)} />}
+      <div className="mainc">
+        <header className="topbar">
+          <button className="ib" onClick={() => setNavAb(true)} aria-label="Abrir menú"><Ico n="menu" /></button>
+          <div className="buscar"><Ico n="search" size={16} /><input placeholder="Buscar archivos y carpetas" value={q} onChange={e => { setQ(e.target.value); setVista('docs') }} /></div>
+          <div className="tb-der">{offline && <span className="chipoff">Sin conexión</span>}
+            <div className="avw"><button className="av" title="Mi cuenta" onClick={e => { e.stopPropagation(); setCuenta(!cuenta) }}><Avatar u={perfil} size={34} /></button>
+              {cuenta && <MiCuenta perfil={perfil} onPerfil={c => { const n = { ...perfil, ...c }; setPerfil(n); try { localStorage.setItem(PERFIL_KEY, JSON.stringify(n)) } catch { /* sin espacio */ } }} onSeg={() => { setCuenta(false); setSeg(true) }} />}</div></div>
+        </header>
+        {offline && <div className="banner">Sin conexión: tus reportes de campo se guardan en el celular y se envían solos cuando vuelva el internet.</div>}
+        {esAdmin && !tieneMfa && !offline && <div className="banner">Recomendado para administradores: activa la verificación en dos pasos. <button className="lnk-b" onClick={() => setSeg(true)}>Activar ahora</button></div>}
+        <main className={'content' + (vista === 'docs' && !offline ? ' full' : '')}>
+          {vista === 'campo' ? <Campo perfil={perfil} /> : offline ? <SinConexion onCampo={() => setVista('campo')} />
+            : vista === 'docs' ? <Drive perfil={perfil} q={q} inicio={inicio} irVista={setVista} />
+            : vista === 'proy' ? <Proyectos perfil={perfil} onAbrir={abrir} /> : vista === 'equipos' ? <Equipos perfil={perfil} /> : vista === 'tareas' ? <Tareas perfil={perfil} />
+            : vista === 'opor' ? <Oportunidades perfil={perfil} /> : vista === 'hab' ? <Habilitantes perfil={perfil} /> : vista === 'firmas' ? <Firmas perfil={perfil} /> : vista === 'pqrs' ? <Pqrs perfil={perfil} />
+            : vista === 'ind' ? <Indicadores perfil={perfil} /> : vista === 'fav' ? <Destacados onAbrir={abrir} /> : vista === 'links' ? <Accesos perfil={perfil} />
+            : vista === 'apr' ? <MisAprobaciones perfil={perfil} /> : vista === 'trash' ? <Papelera perfil={perfil} /> : vista === 'log' ? <Actividad />
+            : vista === 'resp' ? <Respaldo /> : vista === 'users' ? <Usuarios perfil={perfil} /> : <Inicio perfil={perfil} ir={setVista} pend={pend} pendF={pendF} pendCampo={pendCampo} />}
+        </main>
+      </div>
+      {seg && <MfaActivar onClose={() => { setSeg(false); supabase.auth.mfa.getAuthenticatorAssuranceLevel().then(({ data }) => setTieneMfa(!!data && (data.nextLevel === 'aal2' || data.currentLevel === 'aal2'))) }} />}
     </div>
   )
 }
