@@ -214,10 +214,10 @@ const generarActa = async (p, perfil) => {
 const FileIcon = ({ n }) => <div className="fi" style={{ background: COL[ext(n)] || '#546e7a' }}>{ext(n).slice(0, 4) || 'file'}</div>
 const FolderIcon = ({ c }) => <svg width="46" height="46" viewBox="0 0 24 24" fill={c || '#374845'}><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z" /></svg>
 const Logo = ({ h = 40, sub = true }) => <div className="logo"><img src={logo} alt="Ecogis Geomatic SAS" height={h} />{sub && <span className="appn">Gerencia</span>}</div>
-const ICONOS = { home: 'M3 11l9-8 9 8M5 10v10h14V10', folder: 'M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z', star: 'M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z', trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13', target: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z', shield: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z', briefcase: 'M3 8h18v11H3zM9 8V5h6v3', list: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01', pin: 'M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11zM12 7.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z', chat: 'M4 5h16v11H9l-5 4z', gps: 'M12 3v4M12 17v4M3 12h4M17 12h4M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', okc: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM8 12l3 3 5-6', pen: 'M4 20l4-1 11-11-3-3L5 16zM14 6l3 3', link: 'M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1', chart: 'M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6', clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2', users: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2 20c0-3.5 3-6 7-6s7 2.5 7 6M17 5a3 3 0 0 1 0 6M18 14c2.5.5 4 2.5 4 6', download: 'M12 4v11M7 11l5 5 5-5M4 20h16', search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4', menu: 'M4 6h16M4 12h16M4 18h16', lock: 'M6 11h12v9H6zM9 11V8a3 3 0 0 1 6 0v3' }
+const ICONOS = { home: 'M3 11l9-8 9 8M5 10v10h14V10', folder: 'M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z', star: 'M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z', trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13', target: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z', shield: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z', briefcase: 'M3 8h18v11H3zM9 8V5h6v3', list: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01', pin: 'M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11zM12 7.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z', chat: 'M4 5h16v11H9l-5 4z', gps: 'M12 3v4M12 17v4M3 12h4M17 12h4M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', okc: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM8 12l3 3 5-6', pen: 'M4 20l4-1 11-11-3-3L5 16zM14 6l3 3', link: 'M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1', chart: 'M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6', clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2', users: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2 20c0-3.5 3-6 7-6s7 2.5 7 6M17 5a3 3 0 0 1 0 6M18 14c2.5.5 4 2.5 4 6', download: 'M12 4v11M7 11l5 5 5-5M4 20h16', search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4', menu: 'M4 6h16M4 12h16M4 18h16', lock: 'M6 11h12v9H6zM9 11V8a3 3 0 0 1 6 0v3', cal: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4' }
 const Ico = ({ n, size = 18 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={ICONOS[n]} /></svg>
 const NAV = [
-  { t: null, items: [['inicio', 'Inicio', 'home']] },
+  { t: null, items: [['inicio', 'Inicio', 'home'], ['cal', 'Calendario', 'cal']] },
   { t: 'Documentos', items: [['docs', 'Archivos', 'folder'], ['fav', 'Destacados', 'star'], ['trash', 'Papelera', 'trash']] },
   { t: 'Misional', items: [['opor', 'Oportunidades', 'target'], ['hab', 'Documentos habilitantes', 'shield'], ['proy', 'Proyectos', 'briefcase'], ['tareas', 'Tareas y cronograma', 'list'], ['campo', 'Reportes de campo', 'pin'], ['pqrs', 'PQRS', 'chat', true]] },
   { t: 'Apoyo', items: [['equipos', 'Equipos y reservas', 'gps'], ['apr', 'Aprobaciones', 'okc'], ['firmas', 'Firmas electrónicas', 'pen'], ['links', 'Accesos rápidos', 'link']] },
@@ -469,6 +469,56 @@ function Inicio({ perfil, ir, pend, pendF, pendCampo }) {
         <section className="card"><h3>Oportunidades abiertas ({d.opor.length})</h3>{!d.opor.length ? <p className="muted">No hay oportunidades abiertas.</p> : d.opor.slice(0, 6).map(o => { const [c, tx] = semaforo(o.fecha_cierre); return <div key={o.id} className="fila"><span>{o.entidad || 'Sin entidad'}<small>{(o.objeto || '').slice(0, 70)}</small></span>{o.fecha_cierre && <span className={'sem ' + c}>{tx}</span>}</div> })}<button className="btn ghost" style={{ marginTop: 10 }} onClick={() => ir('opor')}>Ver oportunidades</button></section>
         {admin && <section className="card"><h3>Actividad reciente</h3>{!d.act.length ? <p className="muted">Sin movimientos.</p> : d.act.map(a => <div key={a.id} className="fila"><span>{a.user_nombre} · {a.accion}<small>{a.detalle}</small></span><small>{new Date(a.created_at).toLocaleDateString('es-CO')}</small></div>)}</section>}
       </div>
+    </div>
+  )
+}
+
+const TIPOS_CAL = { tarea: ['Tareas', '#2a2aff'], proyecto: ['Entregas de proyectos', '#374845'], reserva: ['Reservas de equipos', '#00a6cc'], equipo: ['Calibración, mantenimiento y seguros', '#e37400'], habilitante: ['Documentos habilitantes', '#8e24aa'], opor: ['Cierre de oportunidades', '#c2185b'], doc: ['Vencimiento y revisión de documentos', '#6d4c41'], pqrs: ['PQRS', '#c62828'] }
+const isoLocal = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+function Calendario({ perfil }) {
+  const admin = perfil.rol === 'admin'
+  const [ev, setEv] = useState([]), [mes, setMes] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1) }), [sel, setSel] = useState(hoyStr()), [oc, setOc] = useState([])
+  useEffect(() => {
+    (async () => {
+      const q = (t, fn) => fn(supabase.from(t)).then(r => r.data || []), E = []
+      const [ta, pr, rs, eq, hb, op, dc, pq] = await Promise.all([
+        q('tareas', t => t.select('titulo,fecha_fin').not('fecha_fin', 'is', null).neq('estado', 'hecha')),
+        q('proyectos', t => t.select('codigo,nombre,fecha_fin_prevista').eq('estado', 'ejecucion').not('fecha_fin_prevista', 'is', null)),
+        q('reservas', t => t.select('equipo_id,desde,hasta,nota')),
+        q('equipos', t => t.select('id,nombre,proxima_calibracion,proximo_mantenimiento,vence_seguro')),
+        q('habilitantes', t => t.select('nombre,fecha_vence').not('fecha_vence', 'is', null)),
+        q('oportunidades', t => t.select('entidad,objeto,fecha_cierre').not('fecha_cierre', 'is', null).in('estado', ['identificada', 'evaluando', 'preparando'])),
+        q('documents', t => t.select('nombre,vence_at,proxima_revision').is('deleted_at', null).or('vence_at.not.is.null,proxima_revision.not.is.null')),
+        admin ? q('pqrs', t => t.select('radicado,asunto,fecha_limite').in('estado', ['recibida', 'en_tramite'])) : Promise.resolve([])
+      ])
+      ta.forEach(x => E.push({ f: x.fecha_fin, t: 'tarea', n: x.titulo }))
+      pr.forEach(x => E.push({ f: x.fecha_fin_prevista, t: 'proyecto', n: `Entrega ${x.codigo} · ${x.nombre}` }))
+      rs.forEach(x => { const n = eq.find(e => e.id === x.equipo_id)?.nombre || 'Equipo'; let k = 0; for (const d = new Date(x.desde + 'T12:00:00'); d <= new Date(x.hasta + 'T12:00:00') && k < 90; d.setDate(d.getDate() + 1), k++) E.push({ f: isoLocal(d), t: 'reserva', n: `${n}${x.nota ? ' · ' + x.nota : ''}` }) })
+      eq.forEach(e => [['proxima_calibracion', 'Calibración'], ['proximo_mantenimiento', 'Mantenimiento'], ['vence_seguro', 'Seguro o licencia']].forEach(([k, t]) => { if (e[k]) E.push({ f: e[k], t: 'equipo', n: `${t}: ${e.nombre}` }) }))
+      hb.forEach(h => E.push({ f: h.fecha_vence, t: 'habilitante', n: h.nombre }))
+      op.forEach(o => E.push({ f: o.fecha_cierre, t: 'opor', n: `${o.entidad || ''} · ${(o.objeto || '').slice(0, 50)}` }))
+      dc.forEach(x => { if (x.vence_at) E.push({ f: x.vence_at, t: 'doc', n: `Vence: ${x.nombre}` }); if (x.proxima_revision) E.push({ f: x.proxima_revision, t: 'doc', n: `Revisar: ${x.nombre}` }) })
+      pq.forEach(x => E.push({ f: x.fecha_limite, t: 'pqrs', n: `${x.radicado} · ${x.asunto}` }))
+      setEv(E)
+    })()
+  }, [admin])
+  const vis = ev.filter(e => !oc.includes(e.t)), off = (mes.getDay() + 6) % 7, nd = new Date(mes.getFullYear(), mes.getMonth() + 1, 0).getDate()
+  const celdas = [...Array(off).fill(null), ...Array.from({ length: nd }, (_, i) => new Date(mes.getFullYear(), mes.getMonth(), i + 1))]
+  while (celdas.length % 7) celdas.push(null)
+  const delDia = iso => vis.filter(e => e.f === iso)
+  return (
+    <div className="page">
+      <div className="head"><div><h2>Calendario</h2><p className="muted">Todas las fechas importantes en un solo lugar.</p></div>
+        <div className="lnk" style={{ marginTop: 0 }}><button className="btn ghost" onClick={() => setMes(new Date(mes.getFullYear(), mes.getMonth() - 1, 1))}>←</button><b style={{ minWidth: 150, textAlign: 'center' }}>{(t => t[0].toUpperCase() + t.slice(1))(mes.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' }))}</b>
+          <button className="btn ghost" onClick={() => setMes(new Date(mes.getFullYear(), mes.getMonth() + 1, 1))}>→</button><button className="btn ghost" onClick={() => { const d = new Date(); setMes(new Date(d.getFullYear(), d.getMonth(), 1)); setSel(hoyStr()) }}>Hoy</button></div></div>
+      <div className="cal-ley">{Object.entries(TIPOS_CAL).filter(([k]) => k !== 'pqrs' || admin).map(([k, [t, c]]) => <button key={k} className={'cal-chip' + (oc.includes(k) ? ' off' : '')} onClick={() => setOc(oc.includes(k) ? oc.filter(x => x !== k) : [...oc, k])}><i style={{ background: c }} />{t}</button>)}</div>
+      <div className="cal"><div className="cal-h">{['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(d => <span key={d}>{d}</span>)}</div>
+        <div className="cal-g">{celdas.map((d, i) => { if (!d) return <div key={'v' + i} className="cal-v" />; const iso = isoLocal(d), es = delDia(iso)
+          return <button key={iso} className={'cal-d' + (iso === hoyStr() ? ' cal-hoy' : '') + (iso === sel ? ' sel' : '')} onClick={() => setSel(iso)}><b>{d.getDate()}</b>
+            {es.slice(0, 3).map((e, k) => <span key={k} className="cal-e" style={{ borderColor: TIPOS_CAL[e.t][1] }}>{e.n}</span>)}{es.length > 3 && <small>+{es.length - 3} más</small>}</button> })}</div></div>
+      <section className="card" style={{ marginTop: 16 }}><h3>{new Date(sel + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</h3>
+        {!delDia(sel).length ? <p className="muted">No hay fechas importantes este día.</p> : delDia(sel).map((e, i) => <div key={i} className="fila"><span><i className="cal-pt" style={{ background: TIPOS_CAL[e.t][1] }} />{e.n}</span><small>{TIPOS_CAL[e.t][0]}</small></div>)}</section>
     </div>
   )
 }
@@ -1878,7 +1928,7 @@ function Principal() {
             : vista === 'opor' ? <Oportunidades perfil={perfil} /> : vista === 'hab' ? <Habilitantes perfil={perfil} /> : vista === 'firmas' ? <Firmas perfil={perfil} /> : vista === 'pqrs' ? <Pqrs perfil={perfil} />
             : vista === 'ind' ? <Indicadores perfil={perfil} /> : vista === 'fav' ? <Destacados onAbrir={abrir} /> : vista === 'links' ? <Accesos perfil={perfil} />
             : vista === 'apr' ? <MisAprobaciones perfil={perfil} /> : vista === 'trash' ? <Papelera perfil={perfil} /> : vista === 'log' ? <Actividad />
-            : vista === 'resp' ? <Respaldo /> : vista === 'users' ? <Usuarios perfil={perfil} /> : <Inicio perfil={perfil} ir={setVista} pend={pend} pendF={pendF} pendCampo={pendCampo} />}
+            : vista === 'cal' ? <Calendario perfil={perfil} /> : vista === 'resp' ? <Respaldo /> : vista === 'users' ? <Usuarios perfil={perfil} /> : <Inicio perfil={perfil} ir={setVista} pend={pend} pendF={pendF} pendCampo={pendCampo} />}
         </main>
       </div>
       {seg && <MfaActivar onClose={() => { setSeg(false); supabase.auth.mfa.getAuthenticatorAssuranceLevel().then(({ data }) => setTieneMfa(!!data && (data.nextLevel === 'aal2' || data.currentLevel === 'aal2'))) }} />}
