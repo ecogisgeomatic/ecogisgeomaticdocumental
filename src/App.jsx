@@ -7,7 +7,7 @@ let ACTOR = null
 const registrar = (accion, detalle) => { if (ACTOR) supabase.from('activity').insert({ user_id: ACTOR.id, user_nombre: ACTOR.nombre || ACTOR.email, accion, detalle }).then(() => {}) }
 const SUB_PROYECTO = ['01_Contrato-y-Propuesta', '02_Planeacion', '03_Captura-de-Campo', '04_Procesamiento-y-Analisis', '05_Control-de-Calidad', '06_Entregables', '07_Cierre-y-Evaluacion']
 
-const TIPOS = ['Contrato', 'Informe técnico', 'Cartografía / SIG', 'Plano / CAD', 'Hoja de cálculo', 'Presentación', 'Imagen', 'Facturación', 'Legal', 'Otro']
+const TIPOS = ['Contrato', 'Informe técnico', 'Hoja de vida', 'Cartografía / SIG', 'Plano / CAD', 'Hoja de cálculo', 'Presentación', 'Imagen', 'Facturación', 'Legal', 'Otro']
 const COLORES = ['#374845', '#2a2aff', '#00cdff', '#e53935', '#fb8c00', '#43a047', '#8e24aa', '#6d4c41']
 const COL = { pdf: '#e53935', doc: '#2a2aff', docx: '#2a2aff', xls: '#2e7d32', xlsx: '#2e7d32', csv: '#2e7d32', ppt: '#fb8c00', pptx: '#fb8c00', dwg: '#6d4c41', dxf: '#6d4c41', shp: '#8e24aa', kml: '#8e24aa', kmz: '#8e24aa', geojson: '#8e24aa', tif: '#00a6cc', tiff: '#00a6cc', jpg: '#c2185b', jpeg: '#c2185b', png: '#c2185b', zip: '#546e7a' }
 const fmt = b => (!b ? '—' : b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.ceil(b / 1024) + ' KB')
@@ -24,7 +24,7 @@ const detectar = n => {
   return 'Otro'
 }
 const signed = async (path, name) => {
-  const { data, error } = await supabase.storage.from('documentos').createSignedUrl(path, 3600, name ? { download: name } : undefined)
+  const { data, error } = await supabase.storage.from(path?.startsWith('hv/') ? 'hojas-vida' : 'documentos').createSignedUrl(path, 3600, name ? { download: name } : undefined)
   return error ? null : data.signedUrl
 }
 const cargarMammoth = () => window.mammoth ? Promise.resolve() : new Promise((ok, no) => {
@@ -214,13 +214,13 @@ const generarActa = async (p, perfil) => {
 const FileIcon = ({ n }) => <div className="fi" style={{ background: COL[ext(n)] || '#546e7a' }}>{ext(n).slice(0, 4) || 'file'}</div>
 const FolderIcon = ({ c }) => <svg width="46" height="46" viewBox="0 0 24 24" fill={c || '#374845'}><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z" /></svg>
 const Logo = ({ h = 40, sub = true }) => <div className="logo"><img src={logo} alt="Ecogis Geomatic SAS" height={h} />{sub && <span className="appn">Gerencia</span>}</div>
-const ICONOS = { home: 'M3 11l9-8 9 8M5 10v10h14V10', folder: 'M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z', star: 'M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z', trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13', target: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z', shield: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z', briefcase: 'M3 8h18v11H3zM9 8V5h6v3', list: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01', pin: 'M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11zM12 7.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z', chat: 'M4 5h16v11H9l-5 4z', gps: 'M12 3v4M12 17v4M3 12h4M17 12h4M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', okc: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM8 12l3 3 5-6', pen: 'M4 20l4-1 11-11-3-3L5 16zM14 6l3 3', link: 'M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1', chart: 'M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6', clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2', users: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2 20c0-3.5 3-6 7-6s7 2.5 7 6M17 5a3 3 0 0 1 0 6M18 14c2.5.5 4 2.5 4 6', download: 'M12 4v11M7 11l5 5 5-5M4 20h16', search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4', menu: 'M4 6h16M4 12h16M4 18h16', lock: 'M6 11h12v9H6zM9 11V8a3 3 0 0 1 6 0v3', cal: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4' }
+const ICONOS = { home: 'M3 11l9-8 9 8M5 10v10h14V10', folder: 'M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z', star: 'M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z', trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13', target: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z', shield: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z', briefcase: 'M3 8h18v11H3zM9 8V5h6v3', list: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01', pin: 'M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11zM12 7.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z', chat: 'M4 5h16v11H9l-5 4z', gps: 'M12 3v4M12 17v4M3 12h4M17 12h4M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', okc: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM8 12l3 3 5-6', pen: 'M4 20l4-1 11-11-3-3L5 16zM14 6l3 3', link: 'M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1', chart: 'M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6', clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2', users: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2 20c0-3.5 3-6 7-6s7 2.5 7 6M17 5a3 3 0 0 1 0 6M18 14c2.5.5 4 2.5 4 6', download: 'M12 4v11M7 11l5 5 5-5M4 20h16', search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4', menu: 'M4 6h16M4 12h16M4 18h16', lock: 'M6 11h12v9H6zM9 11V8a3 3 0 0 1 6 0v3', cal: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4', cv: 'M7 3h8l4 4v14H7zM15 3v4h4M10 12h6M10 16h6' }
 const Ico = ({ n, size = 18 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={ICONOS[n]} /></svg>
 const NAV = [
   { t: null, items: [['inicio', 'Inicio', 'home'], ['cal', 'Calendario', 'cal']] },
   { t: 'Documentos', items: [['docs', 'Archivos', 'folder'], ['fav', 'Destacados', 'star'], ['trash', 'Papelera', 'trash']] },
   { t: 'Misional', items: [['opor', 'Oportunidades', 'target'], ['hab', 'Documentos habilitantes', 'shield'], ['proy', 'Proyectos', 'briefcase'], ['tareas', 'Tareas y cronograma', 'list'], ['campo', 'Reportes de campo', 'pin'], ['pqrs', 'PQRS', 'chat', true]] },
-  { t: 'Apoyo', items: [['equipos', 'Equipos y reservas', 'gps'], ['apr', 'Aprobaciones', 'okc'], ['firmas', 'Firmas electrónicas', 'pen'], ['links', 'Accesos rápidos', 'link']] },
+  { t: 'Apoyo', items: [['equipos', 'Equipos y reservas', 'gps'], ['apr', 'Aprobaciones', 'okc'], ['firmas', 'Firmas electrónicas', 'pen'], ['hv', 'Banco de hojas de vida', 'cv', 'th'], ['links', 'Accesos rápidos', 'link']] },
   { t: 'Evaluación', items: [['ind', 'Indicadores', 'chart'], ['log', 'Actividad', 'clock', true]] },
   { t: 'Administración', admin: true, items: [['users', 'Usuarios y áreas', 'users'], ['resp', 'Respaldo', 'download']] }
 ]
@@ -434,13 +434,13 @@ function MfaActivar({ onClose }) {
   )
 }
 
-function Inicio({ perfil, ir, pend, pendF, pendCampo }) {
+function Inicio({ perfil, ir, pend, pendF, pendCampo, esTH }) {
   const admin = perfil.rol === 'admin'
-  const [d, setD] = useState({ tareas: [], venc: [], proy: [], opor: [], pq: 0, act: [] })
+  const [d, setD] = useState({ tareas: [], venc: [], proy: [], opor: [], pq: 0, act: [], hv: 0 })
   useEffect(() => {
     (async () => {
       const f30 = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10), q = (t, fn) => fn(supabase.from(t)).then(r => r.data || [])
-      const [tareas, eq, hb, dc, proy, opor, pq, act] = await Promise.all([
+      const [tareas, eq, hb, dc, proy, opor, pq, act, hv] = await Promise.all([
         q('tareas', t => t.select('id,titulo,fecha_fin').eq('responsable', perfil.id).neq('estado', 'hecha')),
         q('equipos', t => t.select('nombre,codigo,proxima_calibracion,proximo_mantenimiento,vence_seguro').neq('estado', 'baja')),
         q('habilitantes', t => t.select('nombre,fecha_vence').not('fecha_vence', 'is', null)),
@@ -448,21 +448,22 @@ function Inicio({ perfil, ir, pend, pendF, pendCampo }) {
         q('proyectos', t => t.select('id,codigo,nombre,cliente,fecha_fin_prevista').eq('estado', 'ejecucion').order('fecha_fin_prevista', { nullsFirst: false })),
         q('oportunidades', t => t.select('id,entidad,objeto,fecha_cierre').in('estado', ['identificada', 'evaluando', 'preparando']).order('fecha_cierre', { nullsFirst: false })),
         admin ? q('pqrs', t => t.select('id').in('estado', ['recibida', 'en_tramite'])) : Promise.resolve([]),
-        admin ? q('activity', t => t.select('*').order('created_at', { ascending: false }).limit(8)) : Promise.resolve([])
+        admin ? q('activity', t => t.select('*').order('created_at', { ascending: false }).limit(8)) : Promise.resolve([]),
+        esTH ? q('candidatos', t => t.select('id').eq('estado', 'nuevo')) : Promise.resolve([])
       ])
       const venc = []
       eq.forEach(e => [['proxima_calibracion', 'Calibración'], ['proximo_mantenimiento', 'Mantenimiento'], ['vence_seguro', 'Seguro o licencia']].forEach(([k, t]) => { if (e[k] && e[k] <= f30) venc.push({ f: e[k], t: `${t}: ${e.codigo ? e.codigo + ' · ' : ''}${e.nombre}` }) }))
       hb.forEach(h => { if (h.fecha_vence <= f30) venc.push({ f: h.fecha_vence, t: `Habilitante: ${h.nombre}` }) })
       dc.forEach(x => { if (x.vence_at && x.vence_at <= f30) venc.push({ f: x.vence_at, t: `Documento: ${x.nombre}` }); if (x.proxima_revision && x.proxima_revision <= f30) venc.push({ f: x.proxima_revision, t: `Revisión: ${x.nombre}` }) })
-      venc.sort((a, b) => a.f.localeCompare(b.f)); setD({ tareas, venc, proy, opor, pq: pq.length, act })
+      venc.sort((a, b) => a.f.localeCompare(b.f)); setD({ tareas, venc, proy, opor, pq: pq.length, act, hv: hv.length })
     })()
-  }, [perfil.id, admin])
+  }, [perfil.id, admin, esTH])
   const h = new Date().getHours(), saludo = h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches', atras = d.tareas.filter(t => t.fecha_fin && t.fecha_fin < hoyStr()).length
   const K = ({ k, n, t, sub }) => <button className="kpi" onClick={() => ir(k)}><b>{n}</b><span>{t}</span>{sub && <small>{sub}</small>}</button>
   return (
     <div className="page">
       <div className="head"><div><h2>{saludo}, {(perfil.nombre || '').split(' ')[0] || 'bienvenido'}</h2><p className="muted">{new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p></div></div>
-      <div className="kpis"><K k="tareas" n={d.tareas.length} t="Tareas abiertas" sub={atras ? `${atras} atrasada(s)` : 'Al día'} /><K k="apr" n={pend - pendF} t="Aprobaciones pendientes" /><K k="firmas" n={pendF} t="Firmas pendientes" /><K k="campo" n={pendCampo} t="Reportes sin enviar" />{admin && <K k="pqrs" n={d.pq} t="PQRS por responder" />}</div>
+      <div className="kpis"><K k="tareas" n={d.tareas.length} t="Tareas abiertas" sub={atras ? `${atras} atrasada(s)` : 'Al día'} /><K k="apr" n={pend - pendF} t="Aprobaciones pendientes" /><K k="firmas" n={pendF} t="Firmas pendientes" /><K k="campo" n={pendCampo} t="Reportes sin enviar" />{admin && <K k="pqrs" n={d.pq} t="PQRS por responder" />}{esTH && <K k="hv" n={d.hv} t="Hojas de vida nuevas" />}</div>
       <div className="cols2">
         <section className="card"><h3>Vencimientos en los próximos 30 días</h3>{!d.venc.length ? <p className="muted">No hay nada por vencer.</p> : d.venc.slice(0, 10).map((v, i) => { const [c, tx] = semaforo(v.f); return <div key={i} className="fila"><span>{v.t}</span><span className={'sem ' + c}>{tx}</span></div> })}</section>
         <section className="card"><h3>Proyectos en ejecución ({d.proy.length})</h3>{!d.proy.length ? <p className="muted">No hay proyectos en ejecución.</p> : d.proy.slice(0, 6).map(p => <div key={p.id} className="fila"><span><b>{p.codigo}</b> · {p.nombre}<small>{p.cliente}</small></span><span className="muted">{p.fecha_fin_prevista ? fecha(p.fecha_fin_prevista) : ''}</span></div>)}<button className="btn ghost" style={{ marginTop: 10 }} onClick={() => ir('proy')}>Ver proyectos</button></section>
@@ -523,11 +524,182 @@ function Calendario({ perfil }) {
   )
 }
 
+const AREAS_HV = ['Topografía y fotogrametría', 'SIG y gestión de datos', 'Percepción remota y análisis espacial', 'Profesional geomático o ambiental', 'Técnico o auxiliar de campo', 'Piloto de drones', 'Administrativa y financiera', 'Comercial', 'Talento humano', 'Calidad, SST y ambiente', 'Tecnología (TI)', 'Practicante o pasante', 'Otra']
+const NIVELES_HV = ['Bachiller', 'Técnico', 'Tecnólogo', 'Profesional', 'Especialización', 'Maestría o superior']
+const HERR_HV = ['ArcGIS', 'QGIS', 'AutoCAD / Civil 3D', 'Python / SQL', 'ENVI / ERDAS', 'Pix4D / Agisoft', 'GNSS / estación total', 'Excel avanzado', 'SIG web', 'Gestión de proyectos']
+const EST_HV = { nuevo: 'Nuevo', en_revision: 'En revisión', preseleccionado: 'Preseleccionado', entrevista: 'Entrevista', contratado: 'Contratado', banco: 'Banco de talento', descartado: 'Descartado' }
+const CLASE_HV = { nuevo: 'revision', en_revision: 'revision', preseleccionado: '', entrevista: '', contratado: '', banco: 'obsoleto', descartado: 'borrador' }
+const MIME_HV = { pdf: 'application/pdf', doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }
+const tel57 = t => { const d = (t || '').replace(/\D/g, ''); return d.length === 10 ? '57' + d : d }
+const estrellas = n => '★'.repeat(n || 0) + '☆'.repeat(5 - (n || 0))
+
+function FormHV({ interno, onListo }) {
+  const [f, setF] = useState({ nombre: '', documento: '', email: '', telefono: '', ciudad: '', titulo: '', nivel: 'Profesional', experiencia: '', area: AREAS_HV[0], herramientas: [], otras: '', dron: false, viaje: false, aspiracion: '', mensaje: '', enlace: '', acepta: !!interno, hp: '' })
+  const [file, setFile] = useState(null), [msg, setMsg] = useState(''), [env, setEnv] = useState(false)
+  const set = k => e => setF(x => ({ ...x, [k]: e.target.value }))
+  const enviar = async e => {
+    e.preventDefault(); setMsg('')
+    if (!file) return setMsg('Adjunta la hoja de vida (PDF o Word).')
+    const ext = file.name.split('.').pop().toLowerCase()
+    if (!MIME_HV[ext]) return setMsg('La hoja de vida debe ser PDF, DOC o DOCX.')
+    if (file.size > 5 * 1048576) return setMsg('El archivo pesa más de 5 MB. Redúcelo e intenta de nuevo.')
+    setEnv(true)
+    const path = `hv/${uuid()}.${ext}`
+    const up = await supabase.storage.from('hojas-vida').upload(path, file, { contentType: MIME_HV[ext] })
+    if (up.error) { setEnv(false); return setMsg('No se pudo subir el archivo: ' + up.error.message) }
+    const herr = [...f.herramientas, ...f.otras.split(',').map(x => x.trim()).filter(Boolean)]
+    const { error } = await supabase.rpc('postular', { p_nombre: f.nombre, p_documento: f.documento || null, p_email: f.email, p_telefono: f.telefono || null, p_ciudad: f.ciudad || null, p_titulo: f.titulo || null, p_nivel: f.nivel, p_experiencia: f.experiencia === '' ? null : Number(f.experiencia), p_area: f.area, p_herramientas: herr, p_dron: f.dron, p_viaje: f.viaje, p_aspiracion: f.aspiracion || null, p_mensaje: f.mensaje || null, p_enlace: f.enlace || null, p_acepta: f.acepta, p_path: path, p_archivo: file.name, p_hp: f.hp })
+    setEnv(false); if (error) return setMsg(error.message)
+    if (interno) registrar('Agregó hoja de vida', f.nombre); onListo()
+  }
+  return (
+    <form onSubmit={enviar}>
+      <div className="frm">
+        <label>Nombre completo *<input required value={f.nombre} onChange={set('nombre')} /></label><label>Documento de identidad<input value={f.documento} onChange={set('documento')} /></label>
+        <label>Correo electrónico *<input type="email" required value={f.email} onChange={set('email')} /></label><label>Teléfono o WhatsApp<input value={f.telefono} onChange={set('telefono')} /></label>
+        <label>Ciudad de residencia<input value={f.ciudad} onChange={set('ciudad')} /></label><label>Profesión u oficio<input value={f.titulo} onChange={set('titulo')} placeholder="ej. Ingeniero catastral y geodesta" /></label>
+        <label>Nivel de estudios<select value={f.nivel} onChange={set('nivel')}>{NIVELES_HV.map(n => <option key={n}>{n}</option>)}</select></label><label>Años de experiencia<input type="number" min="0" max="60" step="0.5" value={f.experiencia} onChange={set('experiencia')} /></label>
+        <label>Área de interés<select value={f.area} onChange={set('area')}>{AREAS_HV.map(n => <option key={n}>{n}</option>)}</select></label><label>Aspiración salarial (opcional)<input value={f.aspiracion} onChange={set('aspiracion')} /></label>
+      </div>
+      <b>Herramientas y conocimientos</b>
+      <div className="chkgrid">{HERR_HV.map(h => <label key={h} className="chk"><input type="checkbox" checked={f.herramientas.includes(h)} onChange={e => setF(x => ({ ...x, herramientas: e.target.checked ? [...x.herramientas, h] : x.herramientas.filter(y => y !== h) }))} /> {h}</label>)}</div>
+      <label className="et">Otras herramientas (separadas por coma)<input value={f.otras} onChange={set('otras')} /></label>
+      <label className="chk"><input type="checkbox" checked={f.dron} onChange={e => setF({ ...f, dron: e.target.checked })} /> Tengo licencia o certificación de piloto de drones</label>
+      <label className="chk"><input type="checkbox" checked={f.viaje} onChange={e => setF({ ...f, viaje: e.target.checked })} /> Tengo disponibilidad para viajar a campo</label>
+      <label className="et">Enlace de LinkedIn o portafolio (opcional)<input value={f.enlace} onChange={set('enlace')} /></label>
+      <label className="et">Cuéntanos brevemente por qué quieres trabajar con nosotros (opcional)<textarea rows={3} value={f.mensaje} onChange={set('mensaje')} style={{ font: 'inherit', padding: 10, border: '1px solid var(--line)', borderRadius: 6 }} /></label>
+      <label className="et">Hoja de vida (PDF, DOC o DOCX, máximo 5 MB) *<input type="file" accept=".pdf,.doc,.docx" onChange={e => setFile(e.target.files[0] || null)} /></label>
+      <input className="hp" tabIndex={-1} autoComplete="off" aria-hidden="true" value={f.hp} onChange={set('hp')} />
+      {!interno && <label className="chk"><input type="checkbox" checked={f.acepta} onChange={e => setF({ ...f, acepta: e.target.checked })} /> Autorizo a Ecogis Geomatic S.A.S. a recolectar, almacenar y usar mis datos personales y mi hoja de vida para procesos de selección y para contactarme sobre oportunidades laborales, conforme a la Ley 1581 de 2012. Puedo solicitar su actualización o eliminación en cualquier momento.</label>}
+      {msg && <p className="msg">{msg}</p>}
+      <div className="dact"><button className="btn" disabled={env}>{env ? 'Enviando…' : interno ? 'Guardar hoja de vida' : 'Enviar hoja de vida'}</button></div>
+    </form>
+  )
+}
+
+function EmpleoPublico() {
+  const [ok, setOk] = useState(false)
+  return (
+    <PubLayout>
+      {ok ? <div className="vacio"><b>Recibimos tu hoja de vida</b><p>Gracias por tu interés en Ecogis Geomatic S.A.S. Si tu perfil se ajusta a una oportunidad, te contactaremos.</p></div> : <>
+        <h2>Trabaja con Ecogis Geomatic</h2>
+        <p className="muted">Hacemos levantamientos topográficos y geodésicos, fotogrametría con drones, sistemas de información geográfica, percepción remota y cartografía. Déjanos tu hoja de vida.</p>
+        <p className="muted">Por favor no incluyas datos sensibles (salud, religión, afiliación política) ni copias de documentos de identidad.</p>
+        <FormHV onListo={() => setOk(true)} /></>}
+    </PubLayout>
+  )
+}
+
+function FichaCandidato({ c, admin, onClose, onChange, onAbrir }) {
+  const [e, setE] = useState({ estado: c.estado, calificacion: c.calificacion || 0, notas: c.notas || '' }), [doc, setDoc] = useState(null), [prev, setPrev] = useState(false), [msg, setMsg] = useState('')
+  useEffect(() => { if (c.document_id) supabase.from('documents').select('*').eq('id', c.document_id).maybeSingle().then(({ data }) => setDoc(data)) }, [c.document_id])
+  const guardar = async () => {
+    const d = { estado: e.estado, calificacion: e.calificacion || null, notas: e.notas || null, actualizado_at: new Date().toISOString() }
+    if (c.estado === 'nuevo' && e.estado !== 'nuevo' && !c.primera_respuesta_at) d.primera_respuesta_at = d.actualizado_at
+    const { error } = await supabase.from('candidatos').update(d).eq('id', c.id); if (error) return setMsg(error.message)
+    registrar('Actualizó candidato', `${c.nombre} → ${EST_HV[e.estado]}`); onChange(); onClose()
+  }
+  const borrar = async () => {
+    if (!confirm(`¿Eliminar definitivamente a ${c.nombre} y su hoja de vida? No se puede deshacer.`)) return
+    if (c.document_id) { const r = await supabase.from('documents').delete().eq('id', c.document_id); if (r.error) return setMsg(r.error.message) }
+    const { error } = await supabase.from('candidatos').delete().eq('id', c.id); if (error) return setMsg(error.message)
+    if (doc?.path) await supabase.storage.from('hojas-vida').remove([doc.path])
+    registrar('Eliminó candidato', c.nombre); onChange(); onClose()
+  }
+  const saludo = encodeURIComponent(`Hola ${c.nombre.split(' ')[0]}, te escribimos de Ecogis Geomatic S.A.S. sobre tu hoja de vida.`)
+  const D = ([k, v]) => v ? <div key={k} className="kv"><span>{k}</span><b style={{ textAlign: 'right' }}>{v}</b></div> : null
+  return (
+    <div className="modal" onClick={onClose}><div className="dlg" style={{ width: 'min(760px,100%)' }} onClick={x => x.stopPropagation()}>
+      <h3>{c.nombre}</h3><p className="muted">{c.titulo || 'Sin profesión indicada'} · {c.ciudad || 'Ciudad no indicada'} · recibida el {fecha(c.created_at)}{c.postulaciones > 1 ? ` · se postuló ${c.postulaciones} veces` : ''}</p>
+      <div className="cols2" style={{ marginTop: 10 }}>
+        <div>{[['Área de interés', c.area], ['Nivel de estudios', c.nivel], ['Experiencia', c.experiencia != null ? c.experiencia + ' años' : ''], ['Herramientas', (c.herramientas || []).join(', ')], ['Piloto de drones', c.licencia_dron ? 'Sí' : 'No'], ['Disponibilidad para viajar', c.disponibilidad_viaje ? 'Sí' : 'No'], ['Aspiración', c.aspiracion], ['Documento', c.documento], ['Origen', c.origen === 'formulario' ? 'Formulario público' : 'Cargada por el equipo']].map(D)}</div>
+        <div>{[['Correo', c.email], ['Teléfono', c.telefono]].map(D)}{c.enlace && <div className="kv"><span>Enlace</span><a href={c.enlace} target="_blank" rel="noopener noreferrer">Abrir</a></div>}{c.mensaje && <p className="com"><small>Mensaje del candidato</small>{c.mensaje}</p>}</div>
+      </div>
+      <div className="lnk">{doc && <button className="btn" onClick={() => setPrev(true)}>Ver hoja de vida</button>}{doc && <button className="btn ghost" onClick={() => { onClose(); onAbrir(doc.folder_id) }}>Abrir carpeta</button>}
+        {c.telefono && <a className="btn ghost" target="_blank" rel="noopener noreferrer" href={`https://wa.me/${tel57(c.telefono)}?text=${saludo}`}>WhatsApp</a>}<a className="btn ghost" href={`mailto:${c.email}?subject=${encodeURIComponent('Ecogis Geomatic S.A.S.')}&body=${saludo}`}>Correo</a></div>
+      <div className="frm"><label>Estado del proceso<select value={e.estado} onChange={x => setE({ ...e, estado: x.target.value })}>{Object.entries(EST_HV).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+        <label>Calificación interna<span className="estr">{[1, 2, 3, 4, 5].map(n => <button type="button" key={n} className={'est5' + (e.calificacion >= n ? ' on' : '')} onClick={() => setE({ ...e, calificacion: e.calificacion === n ? 0 : n })}>★</button>)}</span></label></div>
+      <label className="et">Notas internas (solo Talento Humano)<textarea rows={3} value={e.notas} onChange={x => setE({ ...e, notas: x.target.value })} style={{ font: 'inherit', padding: 10, border: '1px solid var(--line)', borderRadius: 6 }} /></label>
+      {msg && <p className="msg">{msg}</p>}
+      <div className="dact">{admin && <button className="chip no" onClick={borrar}>Eliminar definitivamente</button>}<button className="btn ghost" onClick={onClose}>Cancelar</button><button className="btn" onClick={guardar}>Guardar</button></div>
+      {prev && doc && <Preview d={doc} onClose={() => setPrev(false)} />}
+    </div></div>
+  )
+}
+
+function ResumenHV({ l }) {
+  const ahora = Date.now(), dias = d => (ahora - new Date(d)) / 864e5
+  const cuenta = (fn, orden) => { const m = {}; l.forEach(x => [].concat(fn(x)).forEach(k => { if (k) m[k] = (m[k] || 0) + 1 })); return orden ? orden.filter(k => m[k]).map(k => [EST_HV[k] || k, m[k]]) : Object.entries(m).sort((a, b) => b[1] - a[1]) }
+  const barras = (t, datos, max = 8) => <section className="card"><h3>{t}</h3>{!datos.length ? <p className="muted">Sin datos.</p> : datos.slice(0, max).map(([k, v]) => <div key={k} className="barfila"><span title={k}>{k}</span><div className="barbg"><i style={{ width: (v / Math.max(...datos.slice(0, max).map(x => x[1]))) * 100 + '%' }} /></div><b>{v}</b></div>)}</section>
+  const meses = Array.from({ length: 6 }, (_, i) => { const d = new Date(); d.setMonth(d.getMonth() - 5 + i); return d.toISOString().slice(0, 7) })
+  const porMes = meses.map(m => [m, l.filter(x => (x.created_at || '').slice(0, 7) === m).length])
+  const resp = l.filter(x => x.primera_respuesta_at).map(x => (new Date(x.primera_respuesta_at) - new Date(x.created_at)) / 864e5), avgResp = resp.length ? resp.reduce((a, b) => a + b, 0) / resp.length : null
+  const exp = l.filter(x => x.experiencia != null), avgExp = exp.length ? exp.reduce((a, x) => a + Number(x.experiencia), 0) / exp.length : null
+  const proceso = l.filter(x => ['en_revision', 'preseleccionado', 'entrevista'].includes(x.estado)).length, avanz = l.filter(x => ['preseleccionado', 'entrevista', 'contratado'].includes(x.estado)).length
+  const K = (n, t, sub) => <div className="kpi" style={{ cursor: 'default' }}><b>{n}</b><span>{t}</span>{sub && <small>{sub}</small>}</div>
+  return (
+    <div>
+      <div className="kpis">{K(l.length, 'Hojas de vida en el banco')}{K(l.filter(x => dias(x.created_at) <= 30).length, 'Recibidas en 30 días')}{K(proceso, 'En proceso', `${l.filter(x => x.estado === 'nuevo').length} sin revisar`)}{K(l.filter(x => x.estado === 'contratado').length, 'Contratadas')}
+        {K(l.length ? Math.round((avanz / l.length) * 100) + ' %' : '—', 'Llegan a preselección')}{K(avgResp != null ? avgResp.toFixed(1) + ' días' : '—', 'Primera respuesta (promedio)')}{K(l.length ? Math.round((l.filter(x => x.licencia_dron).length / l.length) * 100) + ' %' : '—', 'Con licencia de dron')}{K(avgExp != null ? avgExp.toFixed(1) + ' años' : '—', 'Experiencia promedio')}</div>
+      <div className="cols2">
+        {barras('Embudo del proceso', cuenta(x => x.estado, Object.keys(EST_HV)), 7)}{barras('Por área de interés', cuenta(x => x.area), 13)}
+        {barras('Postulaciones por mes', porMes, 6)}{barras('Por nivel de estudios', cuenta(x => x.nivel))}{barras('Herramientas más frecuentes', cuenta(x => x.herramientas || []), 10)}{barras('Por ciudad', cuenta(x => x.ciudad))}
+        {barras('Por origen', cuenta(x => (x.origen === 'formulario' ? 'Formulario público' : 'Cargadas por el equipo')))}
+      </div>
+    </div>
+  )
+}
+
+function BancoHV({ perfil, onAbrir }) {
+  const admin = perfil.rol === 'admin'
+  const [l, setL] = useState(null), [tab, setTab] = useState('lista'), [sel, setSel] = useState(null), [nuevo, setNuevo] = useState(false), [ok, setOk] = useState(false), [msg, setMsg] = useState('')
+  const [f, setF] = useState({ q: '', area: '', estado: '', nivel: '', dron: false, viejos: false, orden: 'recientes' })
+  const cargar = useCallback(async () => { const { data } = await supabase.from('candidatos').select('*').order('created_at', { ascending: false }).limit(5000); setL(data || []) }, [])
+  useEffect(() => { cargar() }, [cargar])
+  if (l === null) return <div className="panel solo"><p className="vacio">Cargando…</p></div>
+  const q = f.q.trim().toLowerCase(), hace12 = Date.now() - 365 * 864e5
+  let v = l.filter(x => (!q || [x.nombre, x.email, x.titulo, x.ciudad, ...(x.herramientas || [])].join(' ').toLowerCase().includes(q)) && (!f.area || x.area === f.area) && (!f.estado || x.estado === f.estado) && (!f.nivel || x.nivel === f.nivel) && (!f.dron || x.licencia_dron) && (!f.viejos || new Date(x.actualizado_at) < hace12))
+  v = [...v].sort((a, b) => f.orden === 'experiencia' ? (b.experiencia || 0) - (a.experiencia || 0) : f.orden === 'calificacion' ? (b.calificacion || 0) - (a.calificacion || 0) : 0)
+  const enlace = `${window.location.origin}/?empleo=1`, viejos = l.filter(x => new Date(x.actualizado_at) < hace12).length
+  const exportar = async () => {
+    try {
+      await cargarLib('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'XLSX')
+      const filas = v.map(x => ({ Nombre: x.nombre, Documento: x.documento || '', Correo: x.email, 'Teléfono': x.telefono || '', Ciudad: x.ciudad || '', 'Profesión': x.titulo || '', Nivel: x.nivel || '', 'Experiencia (años)': x.experiencia ?? '', 'Área': x.area, Herramientas: (x.herramientas || []).join(', '), 'Piloto de drones': x.licencia_dron ? 'Sí' : 'No', 'Puede viajar': x.disponibilidad_viaje ? 'Sí' : 'No', Estado: EST_HV[x.estado], 'Calificación': x.calificacion || '', Origen: x.origen, Recibida: fecha(x.created_at) }))
+      const wb = window.XLSX.utils.book_new(); window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.json_to_sheet(filas), 'Hojas de vida'); window.XLSX.writeFile(wb, `Banco-Hojas-de-Vida_${hoyStr().replaceAll('-', '')}.xlsx`); registrar('Exportó el banco de hojas de vida', `${filas.length} registros`)
+    } catch { setMsg('No se pudo generar el Excel.') }
+  }
+  const sf = k => e => setF({ ...f, [k]: e.target.value })
+  return (
+    <div className="panel solo">
+      <div className="head"><div><h2>Banco de hojas de vida</h2><p className="muted">Acceso restringido a Talento Humano y administradores. Las hojas de vida se archivan solas en 06_TALENTO-HUMANO / 02_Hojas-de-Vida, ordenadas por área.</p></div>
+        <div className="lnk" style={{ marginTop: 0 }}><button className="btn" onClick={() => setNuevo(true)}>+ Agregar hoja de vida</button><button className="btn ghost" onClick={exportar}>Exportar Excel</button></div></div>
+      <div className="lnk" style={{ marginTop: 0 }}><input readOnly value={enlace} onFocus={e => e.target.select()} /><button className="btn ghost" onClick={async () => { await navigator.clipboard.writeText(enlace); setOk(true) }}>{ok ? 'Copiado' : 'Copiar enlace del formulario'}</button></div>
+      <small>Publica este enlace en tus redes o envíalo a quien quiera postularse. Revisa con tu abogado el texto de autorización de datos antes de difundirlo.</small>
+      {msg && <p className="msg">{msg}</p>}
+      <div className="seg" style={{ width: 'fit-content', margin: '16px 0 12px' }}><button className={tab === 'lista' ? 'on' : ''} onClick={() => setTab('lista')}>Candidatos ({l.length})</button><button className={tab === 'res' ? 'on' : ''} onClick={() => setTab('res')}>Métricas</button></div>
+      {tab === 'res' ? <ResumenHV l={l} /> : <>
+        <div className="bar2"><input placeholder="Buscar por nombre, profesión, ciudad o herramienta" value={f.q} onChange={sf('q')} style={{ flex: 1, minWidth: 220 }} />
+          <select value={f.area} onChange={sf('area')}><option value="">Todas las áreas</option>{AREAS_HV.map(a => <option key={a}>{a}</option>)}</select>
+          <select value={f.estado} onChange={sf('estado')}><option value="">Todos los estados</option>{Object.entries(EST_HV).map(([k, x]) => <option key={k} value={k}>{x}</option>)}</select>
+          <select value={f.nivel} onChange={sf('nivel')}><option value="">Todo nivel</option>{NIVELES_HV.map(a => <option key={a}>{a}</option>)}</select>
+          <select value={f.orden} onChange={sf('orden')}><option value="recientes">Más recientes</option><option value="experiencia">Mayor experiencia</option><option value="calificacion">Mejor calificados</option></select></div>
+        <div className="lnk" style={{ marginTop: 0 }}><label className="chk" style={{ margin: 0 }}><input type="checkbox" checked={f.dron} onChange={e => setF({ ...f, dron: e.target.checked })} /> Solo con licencia de dron</label>
+          <label className="chk" style={{ margin: 0 }}><input type="checkbox" checked={f.viejos} onChange={e => setF({ ...f, viejos: e.target.checked })} /> Sin actualizar hace más de 12 meses ({viejos})</label></div>
+        {!v.length ? <div className="vacio"><b>{l.length ? 'Ningún candidato coincide' : 'Aún no hay hojas de vida'}</b><p>{l.length ? 'Cambia los filtros.' : 'Comparte el enlace del formulario o agrega una manualmente.'}</p></div> : <div className="tabla-w" style={{ marginTop: 10 }}><table>
+          <thead><tr><th>Candidato</th><th>Área</th><th>Profesión</th><th>Exp.</th><th>Ciudad</th><th>Estado</th><th>Calif.</th><th>Recibida</th></tr></thead>
+          <tbody>{v.map(x => <tr key={x.id} className="clic" onClick={() => setSel(x)}><td><b>{x.nombre}</b><small>{x.email}</small></td><td>{x.area}</td><td>{x.titulo}<small>{x.nivel}</small></td><td>{x.experiencia != null ? x.experiencia + ' a' : ''}</td><td>{x.ciudad}</td>
+            <td><span className={'est ' + CLASE_HV[x.estado]} style={{ marginLeft: 0 }}>{EST_HV[x.estado]}</span></td><td className="estr-t">{x.calificacion ? estrellas(x.calificacion) : ''}</td><td>{fecha(x.created_at)}</td></tr>)}</tbody></table></div>}</>}
+      {sel && <FichaCandidato c={sel} admin={admin} onClose={() => setSel(null)} onChange={cargar} onAbrir={onAbrir} />}
+      {nuevo && <div className="modal" onClick={() => setNuevo(false)}><div className="dlg" style={{ width: 'min(760px,100%)' }} onClick={e => e.stopPropagation()}><h3>Agregar hoja de vida</h3><p className="muted">Para hojas de vida que llegaron por correo o WhatsApp.</p><FormHV interno onListo={() => { setNuevo(false); cargar() }} /></div></div>}
+    </div>
+  )
+}
+
 function Respaldo() {
   const [msg, setMsg] = useState(''), [env, setEnv] = useState(false)
   const bajar = async () => {
     setEnv(true); setMsg('Reuniendo la información…')
-    const tablas = ['folders', 'documents', 'proyectos', 'tareas', 'equipos', 'equipo_eventos', 'reservas', 'habilitantes', 'oportunidades', 'reportes_campo', 'aprobaciones', 'firmas_solicitudes', 'pqrs', 'encuestas', 'eventos_sgi', 'links', 'grupos', 'grupo_miembros', 'profiles', 'activity']
+    const tablas = ['folders', 'documents', 'candidatos', 'proyectos', 'tareas', 'equipos', 'equipo_eventos', 'reservas', 'habilitantes', 'oportunidades', 'reportes_campo', 'aprobaciones', 'firmas_solicitudes', 'pqrs', 'encuestas', 'eventos_sgi', 'links', 'grupos', 'grupo_miembros', 'profiles', 'activity']
     try {
       await cargarLib('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', 'XLSX'); const wb = window.XLSX.utils.book_new()
       for (const t of tablas) {
@@ -621,7 +793,7 @@ function Papelera({ perfil }) {
       const { data: vs } = await supabase.from('document_versions').select('path').in('document_id', (data || []).map(r => r.id)); paths.push(...(vs || []).map(r => r.path))
     }
     const { error } = await supabase.from(t === 'd' ? 'documents' : 'folders').delete().eq('id', x.id); if (error) return setMsg(error.message)
-    if (paths.length) await supabase.storage.from('documentos').remove(paths)
+    if (paths.length) { const hv = paths.filter(x => x.startsWith('hv/')), otros = paths.filter(x => !x.startsWith('hv/')); if (otros.length) await supabase.storage.from('documentos').remove(otros); if (hv.length) await supabase.storage.from('hojas-vida').remove(hv) }
     registrar('Eliminó definitivamente', x.nombre); if (!auto) cargar()
   }
   const vaciarVencidos = async () => {
@@ -1866,7 +2038,7 @@ function Accesos({ perfil }) {
 }
 
 function Principal() {
-  const [sesion, setSesion] = useState(undefined), [perfil, setPerfil] = useState(null), [vista, setVista] = useState('inicio'), [q, setQ] = useState(''), [cuenta, setCuenta] = useState(false), [recuperar, setRecuperar] = useState(false), [mas, setMas] = useState(false), [inicio, setInicio] = useState(null), [pend, setPend] = useState(0), [pendF, setPendF] = useState(0), [offline, setOffline] = useState(!navigator.onLine), [pendCampo, setPendCampo] = useState(0), [navAb, setNavAb] = useState(false), [mfa, setMfa] = useState('ok'), [seg, setSeg] = useState(false), [tieneMfa, setTieneMfa] = useState(true)
+  const [sesion, setSesion] = useState(undefined), [perfil, setPerfil] = useState(null), [vista, setVista] = useState('inicio'), [q, setQ] = useState(''), [cuenta, setCuenta] = useState(false), [recuperar, setRecuperar] = useState(false), [mas, setMas] = useState(false), [inicio, setInicio] = useState(null), [pend, setPend] = useState(0), [pendF, setPendF] = useState(0), [offline, setOffline] = useState(!navigator.onLine), [pendCampo, setPendCampo] = useState(0), [navAb, setNavAb] = useState(false), [esTH, setEsTH] = useState(false), [mfa, setMfa] = useState('ok'), [seg, setSeg] = useState(false), [tieneMfa, setTieneMfa] = useState(true)
   useEffect(() => {
     const cache = () => { const c = leerJSON(PERFIL_KEY); return c ? { user: { id: c.id }, offline: true } : null }
     supabase.auth.getSession().then(({ data }) => setSesion(data.session || (!navigator.onLine ? cache() : null))).catch(() => setSesion(cache()))
@@ -1890,6 +2062,7 @@ function Principal() {
     return () => { clearInterval(t); window.removeEventListener('geoteca-reportes', h); window.removeEventListener('online', on) }
   }, [perfil])
   useEffect(() => { if (offline) setVista('campo') }, [offline])
+  useEffect(() => { if (perfil?.activo) supabase.rpc('puede_ver_hv').then(({ data }) => setEsTH(data === true)) }, [perfil])
   useEffect(() => {
     if (!sesion || sesion.offline) return
     supabase.auth.mfa.getAuthenticatorAssuranceLevel().then(({ data }) => { if (data?.nextLevel === 'aal2' && data.currentLevel !== 'aal2') setMfa('pedir'); else { setMfa('ok'); setTieneMfa(data?.nextLevel === 'aal2' || data?.currentLevel === 'aal2') } })
@@ -1907,7 +2080,7 @@ function Principal() {
       <aside className={'sidenav' + (navAb ? ' abierto' : '')}>
         <div className="sn-logo"><Logo h={34} sub={false} /></div>
         <nav>{NAV.filter(g => !g.admin || esAdmin).map((g, i) => <div key={i}>{g.t && <div className="sn-t">{g.t}</div>}
-          {g.items.filter(it => !it[3] || esAdmin).map(([k, t, ic]) => <button key={k} className={'sn-i' + (vista === k ? ' on' : '')} onClick={() => { setVista(k); setNavAb(false) }}><Ico n={ic} /><span>{t}</span>{badge(k) > 0 && <b className="sn-b">{badge(k)}</b>}</button>)}</div>)}</nav>
+          {g.items.filter(it => !it[3] || (it[3] === 'th' ? esAdmin || esTH : esAdmin)).map(([k, t, ic]) => <button key={k} className={'sn-i' + (vista === k ? ' on' : '')} onClick={() => { setVista(k); setNavAb(false) }}><Ico n={ic} /><span>{t}</span>{badge(k) > 0 && <b className="sn-b">{badge(k)}</b>}</button>)}</div>)}</nav>
         <div className="sn-pie">Ecogis Geomatic S.A.S.</div>
       </aside>
       {navAb && <div className="sn-vel" onClick={() => setNavAb(false)} />}
@@ -1928,7 +2101,7 @@ function Principal() {
             : vista === 'opor' ? <Oportunidades perfil={perfil} /> : vista === 'hab' ? <Habilitantes perfil={perfil} /> : vista === 'firmas' ? <Firmas perfil={perfil} /> : vista === 'pqrs' ? <Pqrs perfil={perfil} />
             : vista === 'ind' ? <Indicadores perfil={perfil} /> : vista === 'fav' ? <Destacados onAbrir={abrir} /> : vista === 'links' ? <Accesos perfil={perfil} />
             : vista === 'apr' ? <MisAprobaciones perfil={perfil} /> : vista === 'trash' ? <Papelera perfil={perfil} /> : vista === 'log' ? <Actividad />
-            : vista === 'cal' ? <Calendario perfil={perfil} /> : vista === 'resp' ? <Respaldo /> : vista === 'users' ? <Usuarios perfil={perfil} /> : <Inicio perfil={perfil} ir={setVista} pend={pend} pendF={pendF} pendCampo={pendCampo} />}
+            : vista === 'hv' ? <BancoHV perfil={perfil} onAbrir={abrir} /> : vista === 'cal' ? <Calendario perfil={perfil} /> : vista === 'resp' ? <Respaldo /> : vista === 'users' ? <Usuarios perfil={perfil} /> : <Inicio perfil={perfil} ir={setVista} pend={pend} pendF={pendF} pendCampo={pendCampo} esTH={esTH || esAdmin} />}
         </main>
       </div>
       {seg && <MfaActivar onClose={() => { setSeg(false); supabase.auth.mfa.getAuthenticatorAssuranceLevel().then(({ data }) => setTieneMfa(!!data && (data.nextLevel === 'aal2' || data.currentLevel === 'aal2'))) }} />}
@@ -1942,5 +2115,6 @@ export default function App() {
   if (q.get('encuesta')) return <EncuestaPublica token={q.get('encuesta')} />
   if (q.get('firma')) return <FirmaPublica token={q.get('firma')} />
   if (q.has('pqrs')) return <PqrsPublica />
+  if (q.has('empleo')) return <EmpleoPublico />
   return <Principal />
 }
